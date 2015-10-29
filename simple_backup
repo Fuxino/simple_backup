@@ -1,0 +1,414 @@
+#!/bin/bash
+
+#Copyright 2015 Daniele Fucini <dfucini@gmail.com>
+
+#This program is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+
+#You should have received a copy of the GNU General Public License
+#along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#Version 1.0.0
+#Simple backup script. Reads options, sources and destination from a configuration file or standard input
+
+#Help function
+function help_function {
+   echo "simple_backup, version 1.0.0"
+   echo ""
+   echo "Usage: $0 [OPTIONS]"
+   echo ""
+   echo "Options:"
+   echo "-h, --help                             Print this help and exit."
+   echo "-c, --config      CONFIG_FILE          Use the specified configuration file"
+   echo "                                       instead of the default one."
+   echo "                                       All other options are ignored."
+   echo "-i, --input       INPUT [INPUT...]     Specify a file/dir to include in the backup."
+   echo "-d, --directory   DIR                  Specify the output directory for the backup."
+   echo "-e, --exclude     PATTERN [PATTERN...] Specify a file/dir/pattern to exclude from"
+   echo "                                       the backup."
+   echo "-k, --keep        NUMBER               Specify the number of old backups to keep."
+   echo "                                       Default: keep all."
+   echo ""
+   echo "If no option is given, the program uses the default"
+   echo "configuration file: HOME/.simple_backup/config."
+   echo ""
+   echo "Report bugs to dfucini@gmail.com"
+   exit 0
+}
+
+#Read configuration file
+function read_conf {
+   if [[ "$#" -eq 0 ]]; then
+      CONFIG="$HOME/.simple_backup/config"
+   else
+      CONFIG="$1"
+
+      if [[ ! -f "$CONFIG" ]]; then
+         #If the provided configuration file doesn't exist, exit
+         echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+         echo "Error: Configuration file not found" | tee -a $HOME/.simple_backup/errors.log
+         #If libnotify is installed, show desktop notification that backup failed
+         ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+         exit 1
+      fi
+
+   fi
+
+   while read line
+   do
+      #Ignore comments and empty lines
+      if [[ $line == \#* || $line == "" ]]; then
+         continue
+      else
+         #Get option name and values for the current line
+         var=$(echo "$line" | cut -d"=" -f1)
+
+         case "$var" in
+            #Files/folders to backup
+            inputs)
+               tmp=$(echo "$line" | cut -d"=" -f2)
+               n=$(echo "$tmp" | awk -F ',' '{print NF}') #Files/folders must be separated with commas
+               i=1
+               j=1
+               n_in=0
+
+               #Read each input and save it in an array
+               while [[ $i -le $n ]]
+               do
+                  input=$(echo "$tmp" | cut -d"," -f$i)
+                  input=$(echo "$input" | tr -d \"\')
+                  
+                  if [[ "$input" =~ ^~/ ]]; then
+                     input=$(echo ${input/\~/$HOME})
+                  fi
+
+                  INPUTS[$j]=$input
+
+                  if [[ ! -e "${INPUTS[$j]}" ]]; then
+                     #Warn the user if an input doesn't exists
+                     echo "Warning: input \"${INPUTS[$j]}\" not found. Skipping" | tee -a $HOME/.simple_backup/warnings.log
+                  else
+                     j=$((j+1))
+                     n_in=$((n_in+1))
+                  fi
+
+                  i=$((i+1))
+               done
+               ;;
+
+            #Directory where the backup is saved
+            backup_dir)
+               BACKUP_DEV=$(echo "$line" | cut -d"=" -f2)
+               BACKUP_DEV=$(echo "$BACKUP_DEV" | tr -d \"\')
+
+               if [[ "$BACKUP_DEV" =~ ^~/ ]]; then
+                  BACKUP_DEV=$(echo ${BACKUP_DEV/\~/$HOME})
+               fi
+
+               if [[ -z "$BACKUP_DEV" ]]; then
+                  #If the backup directory is not set, exit
+                  echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+                  echo "Error: No backup folder set in configuration file" | tee -a $HOME/.simple_backup/errors.log
+                  #If libnotify is installed, show desktop notification that backup failed
+                  ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+                  exit 1
+               fi
+
+               if [[ ! -d "$BACKUP_DEV" ]]; then
+                  #If the backup directory doesn't exist, exit
+                  echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+                  echo "Error: Output folder \"$BACKUP_DEV\" not found" | tee -a $HOME/.simple_backup/errors.log
+                  #If libnotify is installed, show desktop notification that backup failed
+                  ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+                  exit 1
+               fi
+
+               BACKUP_DIR=$BACKUP_DEV/simple_backup
+               DATE=$(date +%Y-%m-%d-%H:%M)
+
+               #Create the backup subdirectory using date
+               if [[ ! -d "$BACKUP_DIR" ]]; then
+                  mkdir -p "$BACKUP_DIR/$DATE"
+               else
+                  #If previous backup(s) exist(s), save link to the last backup
+                  LAST_BACKUP=$(readlink -f "$BACKUP_DIR/last_backup")
+                  mkdir "$BACKUP_DIR/$DATE"
+               fi
+
+               #Set the backup directory variable to the newly created subfolder
+               BACKUP_DIR="$BACKUP_DIR/$DATE"
+               ;;
+
+            #Files/directories/patterns to exclude from backup
+            exclude)
+               #Create temp file to store exclude patterns
+               EXCLUDE=$(mktemp)
+               temp=$(echo "$line" | cut -d"=" -f2)
+               i=1
+               n=$(echo "$temp" | awk -F ',' '{print NF}') #Exclude patterns must be separated by commas
+
+               #Read each exclude pattern and save it in the temp file
+               while [[ $i -le $n ]]
+               do
+                  var=$(echo "$temp" | cut -d"," -f$i)
+                  var=$(echo "$var" | tr -d \"\')
+                  
+                  if [[ "$var" =~ ^~/ ]]; then
+                     var=$(echo ${var/\~/$HOME})
+                  fi
+
+                  echo "$var" >> $EXCLUDE
+                  i=$((i+1))
+               done
+               ;;
+
+            #Number of old backups to keep
+            keep)
+               KEEP=$(echo "$line" | cut -d"=" -f2)
+               ;;
+
+            #Unrecognized options
+            *)
+               #Skip unrecognised options
+               echo "$(date): Warning: option \"$var\" not recognised. Skipping" >> $HOME/.simple_backup/warnings.log
+               ;;
+         esac
+      fi
+   done<"$CONFIG"
+
+   return
+}
+
+#Parse options
+function parse_options {
+   i=1
+   n_in=0
+   #Create temp file to store exclude patterns
+   EXCLUDE=$(mktemp)
+
+   while [[ "$#" -gt 0 ]]
+   do
+      var="$1"
+
+      case "$var" in
+         -h | --help)
+            help_function
+            exit 0
+            ;;
+
+         -i | --input)
+            while [[ "$#" -gt 1 && ! "$2" =~ ^- ]]
+            do
+               INPUTS[$i]="$2"
+
+               if [[ -z "${INPUTS[$i]}" ]]; then
+                  echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+                  echo "Error: bad options format" | tee -a $HOME/.simple_backup/errors.log
+                  #If libnotify is installed, show desktop notification that backup failed
+                  ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+                  exit 1
+               fi
+
+               if [[ ! -e "${INPUTS[$i]}" ]]; then
+                  echo "Warning: input \"${INPUTS[$i]}\" not found. Skipping" | tee -a $HOME/.simple_backup/warnings.log
+               else
+                  i=$((i+1))
+                  n_in=$((n_in+1))
+               fi
+
+               shift
+            done
+
+            if [[ $n_in -eq 0 ]]; then
+               echo "$(date): Backup finished (no files copied)" >> $HOME/.simple_backup/simple_backup.log
+               echo "Warning: no valid input selected. Nothing to do" | tee -a $HOME/.simple_backup/warnings.log
+               #If libnotify is installed, show desktop notification that backup finished
+               ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed (warnings)"
+               exit 0
+            fi
+
+            ;;
+
+         -d | --directory)
+            BACKUP_DEV="$2"
+
+            if [[ -z "$BACKUP_DEV" || ! -d "$BACKUP_DEV" ]]; then
+               echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+               echo "Error: output folder \"$BACKUP_DEV\" not found" | tee -a $HOME/.simple_backup/errors.log
+               #If libnotify is installed, show desktop notification that backup failed
+               ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+               exit 1
+            fi
+
+            BACKUP_DIR="$BACKUP_DEV/simple_backup"
+            DATE=$(date +%Y-%m-%d-%H:%M)
+
+            #Create the backup subdirectory using date
+            if [[ ! -d "$BACKUP_DIR" ]]; then
+               mkdir -p "$BACKUP_DIR/$DATE"
+            else
+               #If previous backup(s) exist(s), save link to the last backup
+               LAST_BACKUP=$(readlink -f "$BACKUP_DIR/last_backup")
+               mkdir "$BACKUP_DIR/$DATE"
+            fi
+
+            #Set the backup directory variable to the newly created subfolder
+            BACKUP_DIR="$BACKUP_DIR/$DATE"
+            shift
+            ;;
+
+         -e | --exclude)
+            while [[ "$#" -gt 1 && ! "$2" =~ ^- ]]
+            do
+               echo "$2" >> "$EXCLUDE"
+               shift
+            done
+            ;;
+
+         -k | --keep)
+            KEEP="$2"
+            shift
+            ;;
+
+         -c | --config)
+            if [[ -f "$EXCLUDE" ]]; then
+               rm "$EXCLUDE"
+            fi
+            read_conf "$2"
+            return
+            ;;
+
+         *)
+            echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+            echo "Error: Option $1 not recognised. Use 'simple-backup -h' to see available options" | tee -a $HOME/.simple_backup/errors.log
+            #If libnotify is installed, show desktop notification that backup failed
+            ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+            exit 1
+            ;;
+      esac
+
+      shift
+   done
+
+   return
+}
+
+#Create HOME/.simple_backup if it doesn't exist
+if [[ ! -d "$HOME/.simple_backup" ]]; then
+   mkdir "$HOME/.simple_backup"
+fi
+
+#Check number of parameters
+if [[ "$#" -lt 1 ]]; then
+   #Read parameters from configuration file
+   default_config=1
+else
+   default_config=0
+fi
+
+#Backup old log files
+if [[ -f $HOME/.simple_backup/simple_backup.log ]]; then
+   mv $HOME/.simple_backup/simple_backup.log $HOME/.simple_backup/simple_backup.log.old
+fi
+
+if [[ -f $HOME/.simple_backup/errors.log ]]; then
+   mv $HOME/.simple_backup/errors.log $HOME/.simple_backup/errors.log.old
+fi
+
+if [[ -f $HOME/.simple_backup/warnings.log ]]; then
+   mv $HOME/.simple_backup/warnings.log $HOME/.simple_backup/warnings.log.old
+fi
+
+#If no input parameter is given, check existence of config file
+if [[ $default_config -eq 1 && ! -f $HOME/.simple_backup/config ]]; then
+   #If no config file and input parameter is given, exit
+   echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
+   echo "Error: Configuration file not found" | tee $HOME/.simple_backup/errors.log
+   #If libnotify is installed, show desktop notification that backup failed
+   ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+   exit 1
+elif [[ $default_config -eq 1 && -f $HOME/.simple_backup/config ]]; then
+   #Read configuration file
+   read_conf
+else
+   #Parse command line arguments
+   parse_options "$@"
+fi
+
+echo "$(date): Starting backup" > $HOME/.simple_backup/simple_backup.log
+#If libnotify is installed, show desktop notification that backup is starting
+! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Starting backup"
+
+#If specified, keep the last n backups and remove the others. Default: keep all
+if [[ -n $KEEP ]]; then
+   N_BACKUP=$(ls -l $BACKUP_DEV/simple_backup | grep -c ^d)
+   N_BACKUP=$(($N_BACKUP-1))
+
+   if [[ $N_BACKUP -gt $KEEP ]]; then
+      echo "$(date): Removing old backups..." >> $HOME/.simple_backup/simple_backup.log
+      REMOVE=$(mktemp)
+      find $BACKUP_DEV/simple_backup/* -maxdepth 0 -type d | sort | head -n $(($N_BACKUP - $KEEP)) >> $REMOVE
+
+      while read line
+      do
+         rm -r $line
+         echo "Removed backup: $line" >> $HOME/.simple_backup/simple_backup.log
+      done<$REMOVE
+
+      rm $REMOVE  
+   fi
+      
+fi
+
+i=1
+
+#Run rsync for each input
+while [ $i -le $n_in ]
+do
+   if [[ -z "$LAST_BACKUP" ]]; then
+      rsync -acv -H -X -R --exclude-from "$EXCLUDE" "${INPUTS[$i]}" "$BACKUP_DIR" >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
+   else
+      rsync -acv -H -X -R --link-dest="$LAST_BACKUP" --exclude-from "$EXCLUDE" "${INPUTS[$i]}" "$BACKUP_DIR" >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
+   fi
+   i=$((i+1))
+done
+
+#Update the logs
+if [[ -f $HOME/.simple_backup/errors.log && $(cat $HOME/.simple_backup/errors.log | wc -l) -gt 0 ]]; then
+   echo "$(date): Backup finished with errors" >> $HOME/.simple_backup/simple_backup.log
+   error_flag=1
+elif [[ -f $HOME/.simple_backup/warnings.log && $(cat $HOME/.simple_backup/warnings.log | wc -l) -gt 0 ]]; then
+   echo "$(date): Backup finished with warnings" >> $HOME/.simple_backup/simple_backup.log
+   error_flag=2
+else
+   echo "$(date): Backup finished" >> $HOME/.simple_backup/simple_backup.log
+   error_flag=0
+fi
+
+if [[ ! -z $EXCLUDE ]]; then
+   rm $EXCLUDE
+fi
+
+if [[ -L "$BACKUP_DEV/simple_backup/last_backup" ]]; then
+   rm "$BACKUP_DEV/simple_backup/last_backup"
+fi
+
+BACKUP_DIR_FULL=$(readlink -f "$BACKUP_DIR")
+ln -sf "$BACKUP_DIR_FULL" "$BACKUP_DEV/simple_backup/last_backup"
+
+if [[ $error_flag -eq 0 ]]; then
+   ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup finished"
+elif [[ $error_flag -eq 1 ]]; then
+   ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup finished (errors)"
+else
+   ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup finished (warnings)"
+fi
+
+exit 0
