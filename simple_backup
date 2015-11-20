@@ -86,34 +86,36 @@ function read_conf {
          case "$var" in
             #Files/folders to backup
             inputs)
+               #Create a temporary file to store inputs
+               INPUTS=$(mktemp)
                tmp=$(echo "$line" | cut -d"=" -f2)
                n=$(echo "$tmp" | awk -F ',' '{print NF}') #Files/folders must be separated with commas
                i=1
-               j=1
+               #j=1
                n_in=0
 
-               #Read each input and save it in an array
+               #Read each input and save it to the INPUTS file
                while [[ $i -le $n ]]
                do
                   input=$(echo "$tmp" | cut -d"," -f$i)
                   input=$(echo "$input" | tr -d \"\')
-                  
+
                   if [[ "$input" =~ ^~/ ]]; then
                      input=$(echo ${input/\~/$HOME})
                   fi
 
-                  INPUTS[$j]=$input
-
-                  if [[ ! -e "${INPUTS[$j]}" ]]; then
-                     #Warn the user if an input doesn't exists
-                     echo "Warning: input \"${INPUTS[$j]}\" not found. Skipping" | tee -a $HOME/.simple_backup/warnings.log
+                  if [[ ! -e "$input" ]]; then
+                     #Warn the user if an input doesn't exist
+                     echo "Warning: input \"$input\" not found. Skipping" | tee -a $HOME/.simple_backup/warning.log
                   else
-                     j=$((j+1))
                      n_in=$((n_in+1))
                   fi
 
+                  echo "$input" >> $INPUTS
+
                   i=$((i+1))
                done
+
                ;;
 
             #Directory where the backup is saved
@@ -256,11 +258,14 @@ function parse_options {
             ;;
 
          -i | --input)
+            #Create a temporary file to store inputs
+            INPUTS=$(mktemp)
+
             while [[ "$#" -gt 1 && ! "$2" =~ ^- ]]
             do
-               INPUTS[$i]="$2"
+               input="$2"
 
-               if [[ -z "${INPUTS[$i]}" ]]; then
+               if [[ -z "$input" ]]; then
                   echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
                   echo "Error: bad options format" | tee -a $HOME/.simple_backup/errors.log
                   #If libnotify is installed, show desktop notification that backup failed
@@ -281,11 +286,12 @@ function parse_options {
                   exit 1
                fi
 
-               if [[ ! -e "${INPUTS[$i]}" ]]; then
-                  echo "Warning: input \"${INPUTS[$i]}\" not found. Skipping" | tee -a $HOME/.simple_backup/warnings.log
+               if [[ ! -e "$input" ]]; then
+                 echo "Warning: input \"${INPUTS[$i]}\" not found. Skipping" | tee -a $HOME/.simple_backup/warnings.log
                else
                   i=$((i+1))
                   n_in=$((n_in+1))
+                  echo "$input" >> "$INPUTS"
                fi
 
                shift
@@ -484,18 +490,16 @@ if [[ -n $KEEP ]]; then
       
 fi
 
-i=1
+# Sort input files for rsync efficiency
+if [[ ! -z "$INPUTS" ]]; then
+   sort "$INPUTS" -o "$INPUTS"
+fi
 
-#Run rsync for each input
-while [ $i -le $n_in ]
-do
-   if [[ -z "$LAST_BACKUP" ]]; then
-      rsync -acv -H -X -R --exclude-from "$EXCLUDE" "${INPUTS[$i]}" "$BACKUP_DIR" >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
-   else
-      rsync -acv -H -X -R --link-dest="$LAST_BACKUP" --exclude-from "$EXCLUDE" "${INPUTS[$i]}" "$BACKUP_DIR" >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
-   fi
-   i=$((i+1))
-done
+if [[ -z "$LAST_BACKUP" ]]; then
+   rsync -acrv -H -X -R --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
+else
+   rsync -acrv -H -X -R --link-dest="$LAST_BACKUP" --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
+fi
 
 #Update the logs
 if [[ -f $HOME/.simple_backup/errors.log && $(cat $HOME/.simple_backup/errors.log | wc -l) -gt 0 ]]; then
@@ -509,8 +513,12 @@ else
    error_flag=0
 fi
 
-if [[ ! -z $EXCLUDE ]]; then
-   rm $EXCLUDE
+if [[ ! -z "$EXCLUDE" ]]; then
+   rm "$EXCLUDE"
+fi
+
+if [[ ! -z "$INPUTS" ]]; then
+   rm "$INPUTS"
 fi
 
 if [[ -L "$BACKUP_DEV/simple_backup/last_backup" ]]; then
