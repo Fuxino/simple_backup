@@ -1,5 +1,7 @@
 #Example config file for my_backup
 
+# WARNING: Values should NOT be quoted, e.g. use inputs=/some/dir instead of inputs="/some/dir"
+
 #Input directories. Use a comma to separate items
 inputs=/home/my_home,/etc
 
