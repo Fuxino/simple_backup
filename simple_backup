@@ -15,7 +15,7 @@
 #You should have received a copy of the GNU General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#Version 1.2
+#Version 1.2.1
 #Simple backup script. Reads options, sources and destination from a configuration file or standard input
 
 #Help function
@@ -35,6 +35,8 @@ function help_function {
    echo "                                       the backup."
    echo "-k, --keep        NUMBER               Specify the number of old backups to keep."
    echo "                                       Default: keep all."
+   echo "-u, --user        USER                 User performing the backup."
+   echo "                                       Default: current user."
    echo ""
    echo "If no option is given, the program uses the default"
    echo "configuration file: $HOME/.simple_backup/config."
@@ -270,11 +272,19 @@ function parse_options {
             ;;
 
          -c | --config)
-            if [[ -f "$EXCLUDE" ]]; then
                rm "$EXCLUDE"
-            fi
+               rm "$INPUTS"
+
             read_conf "$2"
             return
+            ;;
+
+         -u | --user)
+               rm "$EXCLUDE"
+               rm "$INPUTS"
+               config="/home/$2/.simple_backup/config"
+               read_conf "$config"
+               return
             ;;
 
          *)
