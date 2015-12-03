@@ -15,7 +15,7 @@
 #You should have received a copy of the GNU General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#Version 1.2.1
+#Version 1.2.2
 #Simple backup script. Reads options, sources and destination from a configuration file or standard input
 
 #Help function
@@ -37,9 +37,11 @@ function help_function {
    echo "                                       Default: keep all."
    echo "-u, --user        USER                 User performing the backup."
    echo "                                       Default: current user."
+   echo "                                       WARNING: This currently doesn't work with"
+   echo "                                       other options!"
    echo ""
    echo "If no option is given, the program uses the default"
-   echo "configuration file: $HOME/.simple_backup/config."
+   echo "configuration file: $HOMEDIR/.simple_backup/config."
    echo ""
    echo "Report bugs to dfucini@gmail.com"
    exit 0
@@ -48,28 +50,35 @@ function help_function {
 #Read configuration file
 function read_conf {
    if [[ "$#" -eq 0 ]]; then
-      CONFIG="$HOME/.simple_backup/config"
+      CONFIG="$HOMEDIR/.simple_backup/config"
+      
+      if [[ ! -f "$CONFIG" ]]; then
+         #If default config file doesn't exist, exit
+         echo "$(date): Backup failed (see errors.log)" >> $LOG
+         echo "Error: Configuration file not found" | tee $ERR
+         #If libnotify is installed, show desktop notification that backup failed
+         ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+
+         mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+         mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+         mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
+
+         exit 1
+      fi
+
    else
       CONFIG="$1"
 
       if [[ ! -f "$CONFIG" ]]; then
          #If the provided configuration file doesn't exist, exit
-         echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
-         echo "Error: Configuration file not found" | tee -a $HOME/.simple_backup/errors.log
+         echo "$(date): Backup failed (see errors.log)" >> $LOG
+         echo "Error: Configuration file not found" | tee -a $ERR
          #If libnotify is installed, show desktop notification that backup failed
          ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
 
-         if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-            rm -f $HOME/.simple_backup/simple_backup.log.old
-         fi
-
-         if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-            rm -f $HOME/.simple_backup/errors.log.old
-         fi
-
-         if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-            rm -f $HOME/.simple_backup/warnings.log.old
-         fi
+         mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+         mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+         mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
          exit 1
       fi
@@ -84,7 +93,7 @@ function read_conf {
 
    #Parse the configuration file
    awk -v INPUTS="$INPUTS" -v EXCLUDE="$EXCLUDE" -v BACKUP="$BACKUP" \
-       -v NKEEP="$NKEEP" -v UHOME="$HOME/" -F '[=,]' \
+       -v NKEEP="$NKEEP" -v UHOME="$HOMEDIR/" -F '[=,]' \
       '$1=="inputs" { for ( i=2; i<=NF; i++ ) { sub(/^~\//,UHOME,$i); print $i > INPUTS } }
        $1=="backup_dir" { sub(/^~\//,UHOME,$2); print $2 > BACKUP }
        $1=="exclude" { for ( i=2; i<=NF; i++ ) { sub(/^~\//,UHOME,$i); print $i > EXCLUDE } }
@@ -98,22 +107,14 @@ function read_conf {
 
    if [[ -z "$BACKUP_DEV" || ! -d "$BACKUP_DEV" ]]; then
       #If the backup directory is not set or doesn't exist, exit
-      echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
-      echo "Error: Output folder \"$BACKUP_DEV\" not found" | tee -a $HOME/.simple_backup/errors.log
+      echo "$(date): Backup failed (see errors.log)" >> $LOG
+      echo "Error: Output folder \"$BACKUP_DEV\" not found" | tee -a $ERR
       #If libnotify is installed, show desktop notification that backup failed
       ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
-
-      if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-         rm -f $HOME/.simple_backup/simple_backup.log.old
-      fi
-
-      if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-         rm -f $HOME/.simple_backup/errors.log.old
-      fi
-
-      if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-         rm -f $HOME/.simple_backup/warnings.log.old
-      fi
+   
+      mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+      mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+      mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
       rm "$INPUTS"
       rm "$EXCLUDE"
@@ -159,18 +160,6 @@ function parse_options {
          -h | --help)
             help_function
 
-            if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-               mv -f $HOME/.simple_backup/simple_backup.log.old $HOME/.simple_backup/simple_backup.log
-            fi
-
-            if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-               mv -f $HOME/.simple_backup/errors.log.old $HOME/.simple_backup/errors.log
-            fi
-
-            if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-               mv -f $HOME/.simple_backup/warnings.log.old $HOME/.simple_backup/warnings.log
-            fi
-
             rm $INPUTS
             rm $EXCLUDE
 
@@ -184,28 +173,23 @@ function parse_options {
                input="$2"
 
                if [[ -z "$input" ]]; then
-                  echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
-                  echo "Error: bad options format" | tee -a $HOME/.simple_backup/errors.log
+                  echo "$(date): Backup failed (see errors.log)" >> $LOG
+                  echo "Error: bad options format" | tee -a $ERR
                   #If libnotify is installed, show desktop notification that backup failed
                   ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
 
-                  if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-                     rm -f $HOME/.simple_backup/simple_backup.log.old
-                  fi
+                  mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+                  mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+                  mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
-                  if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-                     rm -f $HOME/.simple_backup/errors.log.old
-                  fi
-
-                  if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-                     rm -f $HOME/.simple_backup/warnings.log.old
-                  fi
+                  rm $INPUTS
+                  rm $EXCLUDE
 
                   exit 1
                fi
 
                if [[ ! -e "$input" ]]; then
-                 echo "Warning: input \"${INPUTS[$i]}\" not found. Skipping" | tee -a $HOME/.simple_backup/warnings.log
+                 echo "Warning: input \"${INPUTS[$i]}\" not found. Skipping" | tee -a $WARN
                else
                   i=$((i+1))
                   n_in=$((n_in+1))
@@ -221,22 +205,17 @@ function parse_options {
             BACKUP_DEV="$2"
 
             if [[ -z "$BACKUP_DEV" || ! -d "$BACKUP_DEV" ]]; then
-               echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
-               echo "Error: output folder \"$BACKUP_DEV\" not found" | tee -a $HOME/.simple_backup/errors.log
+               echo "$(date): Backup failed (see errors.log)" >> $LOG
+               echo "Error: output folder \"$BACKUP_DEV\" not found" | tee -a $ERR
                #If libnotify is installed, show desktop notification that backup failed
                ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
 
-               if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-                  rm -f $HOME/.simple_backup/simple_backup.log.old
-               fi
+               mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+               mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+               mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
-               if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-                  rm -f $HOME/.simple_backup/errors.log.old
-               fi
-
-               if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-                  rm -f $HOME/.simple_backup/warnings.log.old
-               fi
+               rm $INPUTS
+               rm $EXCLUDES
 
                exit 1
             fi
@@ -282,28 +261,47 @@ function parse_options {
          -u | --user)
                rm "$EXCLUDE"
                rm "$INPUTS"
+
+               if [[ ! -d "/home/$2" ]]; then
+                  echo "$(date): Backup failed (see errors.log)" >> $LOG
+                  echo "Error: user $2 doesn't exist" | tee -a $ERR
+                  #If libnotify is installed, show desktop notification that backup failed
+                  ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
+
+                  mv $LOG "HOMEDIR/.simple_backup/simple_backup.log"
+                  mv $ERR "HOMEDIR/.simple_bakup/errors.log"
+                  mv $WARN "HOMEDIR/.simple_backup/warnings.log"
+
+                  exit 1
+               fi
+
+               if [[ ! -d "/home/$2/.simple_backup" ]]; then
+                  mkdir "/home/$2/.simple_backup"
+
+                  echo "Created directory \"$HOMEDIR/.simple_backup\"." 
+                  echo "Copy there sample configuration and edit it"
+                  echo "to your needs before running the backup."
+
+                  exit 1
+               fi
+
+               HOMEDIR="/home/$2"
                config="/home/$2/.simple_backup/config"
+               
                read_conf "$config"
+               
                return
             ;;
 
          *)
-            echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
-            echo "Error: Option $1 not recognised. Use 'simple-backup -h' to see available options" | tee -a $HOME/.simple_backup/errors.log
+            echo "$(date): Backup failed (see errors.log)" >> $LOG
+            echo "Error: Option $1 not recognised. Use 'simple-backup -h' to see available options" | tee -a $ERR
             #If libnotify is installed, show desktop notification that backup failed
             ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
 
-            if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-               rm -f $HOME/.simple_backup/simple_backup.log.old
-            fi
-
-            if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-               rm -f $HOME/.simple_backup/errors.log.old
-            fi
-
-            if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-               rm -f $HOME/.simple_backup/warnings.log.old
-            fi
+            mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+            mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+            mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
             exit 1
             ;;
@@ -315,83 +313,44 @@ function parse_options {
    return
 }
 
-#Create HOME/.simple_backup if it doesn't exist
-if [[ ! -d "$HOME/.simple_backup" ]]; then
-   mkdir "$HOME/.simple_backup"
-fi
+#Create temporary log files
+LOG=$(mktemp)
+ERR=$(mktemp)
+WARN=$(mktemp)
+
+HOMEDIR="$HOME"
 
 #Check number of parameters
-if [[ "$#" -lt 1 ]]; then
-   #Read parameters from configuration file
-   default_config=1
-else
-   default_config=0
-fi
+if [[ "$#" -eq 0 ]]; then
+   if [[ ! -d "$HOMEDIR/.simple_backup" ]]; then
+      mkdir "$HOMEDIR/.simple_backup"
 
-#Backup old log files
-if [[ -f $HOME/.simple_backup/simple_backup.log ]]; then
-   mv -f $HOME/.simple_backup/simple_backup.log $HOME/.simple_backup/simple_backup.log.old
-fi
+      echo "Created directory \"$HOMEDIR/.simple_backup\"." 
+      echo "Copy there sample configuration and edit it"
+      echo "to your needs before running the backup."
 
-if [[ -f $HOME/.simple_backup/errors.log ]]; then
-   mv -f $HOME/.simple_backup/errors.log $HOME/.simple_backup/errors.log.old
-fi
-
-if [[ -f $HOME/.simple_backup/warnings.log ]]; then
-   mv -f $HOME/.simple_backup/warnings.log $HOME/.simple_backup/warnings.log.old
-fi
-
-#If no input parameter is given, check existence of config file
-if [[ $default_config -eq 1 && ! -f $HOME/.simple_backup/config ]]; then
-   #If no config file and input parameter is given, exit
-   echo "$(date): Backup failed (see errors.log)" >> $HOME/.simple_backup/simple_backup.log
-   echo "Error: Configuration file not found" | tee $HOME/.simple_backup/errors.log
-   #If libnotify is installed, show desktop notification that backup failed
-   ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup failed"
-
-   if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-      rm -f $HOME/.simple_backup/simple_backup.log.old
+      exit 1
    fi
 
-   if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-      rm -f $HOME/.simple_backup/errors.log.old
-   fi
-
-   if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-      rm -f $HOME/.simple_backup/warnings.log.old
-   fi
-
-   exit 1
-elif [[ $default_config -eq 1 && -f $HOME/.simple_backup/config ]]; then
-   #Read configuration file
    read_conf
 else
-   #Parse command line arguments
-   parse_options "$@"
+   parse_options $@
 fi
-            
+
 if [[ -z $n_in || $n_in -eq 0 ]]; then
-   echo "$(date): Backup finished (no files copied)" >> $HOME/.simple_backup/simple_backup.log
-   echo "Warning: no valid input selected. Nothing to do" | tee -a $HOME/.simple_backup/warnings.log
+   echo "$(date): Backup finished (no files copied)" >> $LOG
+   echo "Warning: no valid input selected. Nothing to do" | tee -a $WARN
    #If libnotify is installed, show desktop notification that backup finished
    ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup finished (warnings)"
                
-   if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-      rm -f $HOME/.simple_backup/simple_backup.log.old
-   fi
-
-   if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-      rm -f $HOME/.simple_backup/errors.log.old
-   fi
-
-   if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-      rm -f $HOME/.simple_backup/warnings.log.old
-   fi
+   mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+   mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+   mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
    exit 0
 fi
 
-echo "$(date): Starting backup" > $HOME/.simple_backup/simple_backup.log
+echo "$(date): Starting backup" > $LOG
 #If libnotify is installed, show desktop notification that backup is starting
 ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Starting backup"
 
@@ -401,14 +360,14 @@ if [[ -n $KEEP ]]; then
    N_BACKUP=$(($N_BACKUP-1))
 
    if [[ $N_BACKUP -gt $KEEP ]]; then
-      echo "$(date): Removing old backups..." >> $HOME/.simple_backup/simple_backup.log
+      echo "$(date): Removing old backups..." >> $LOG
       REMOVE=$(mktemp)
       find $BACKUP_DEV/simple_backup/* -maxdepth 0 -type d | sort | head -n $(($N_BACKUP - $KEEP)) >> $REMOVE
 
       while read line
       do
          rm -r $line
-         echo "Removed backup: $line" >> $HOME/.simple_backup/simple_backup.log
+         echo "Removed backup: $line" >> $LOG
       done<$REMOVE
 
       rm $REMOVE  
@@ -422,22 +381,26 @@ if [[ ! -z "$INPUTS" ]]; then
 fi
 
 if [[ -z "$LAST_BACKUP" ]]; then
-   rsync -acrv -H -X -R --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
+   rsync -acrv -H -X -R --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
 else
-   rsync -acrv -H -X -R --link-dest="$LAST_BACKUP" --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> "$HOME/.simple_backup/simple_backup.log" 2>> "$HOME/.simple_backup/errors.log"
+   rsync -acrv -H -X -R --link-dest="$LAST_BACKUP" --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
 fi
 
 #Update the logs
-if [[ -f $HOME/.simple_backup/errors.log && $(cat $HOME/.simple_backup/errors.log | wc -l) -gt 0 ]]; then
-   echo "$(date): Backup finished with errors" >> $HOME/.simple_backup/simple_backup.log
+if [[ $(cat $ERR | wc -l) -gt 0 ]]; then
+   echo "$(date): Backup finished with errors" >> $LOG
    error_flag=1
-elif [[ -f $HOME/.simple_backup/warnings.log && $(cat $HOME/.simple_backup/warnings.log | wc -l) -gt 0 ]]; then
-   echo "$(date): Backup finished with warnings" >> $HOME/.simple_backup/simple_backup.log
+elif [[ $(cat $WARN | wc -l) -gt 0 ]]; then
+   echo "$(date): Backup finished with warnings" >> $LOG
    error_flag=2
 else
-   echo "$(date): Backup finished" >> $HOME/.simple_backup/simple_backup.log
+   echo "$(date): Backup finished" >> $LOG
    error_flag=0
 fi
+
+mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
 if [[ ! -z "$EXCLUDE" ]]; then
    rm "$EXCLUDE"
@@ -460,18 +423,6 @@ elif [[ $error_flag -eq 1 ]]; then
    ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup finished (errors)"
 else
    ! command -v notify-send > /dev/null 2>&1 || DISPLAY=:0.0 notify-send -u low -t 10000 "Backup finished (warnings)"
-fi
-
-if [[ -f $HOME/.simple_backup/simple_backup.log.old ]]; then
-   rm -f $HOME/.simple_backup/simple_backup.log.old
-fi
-
-if [[ -f $HOME/.simple_backup/errors.log.old ]]; then
-   rm -f $HOME/.simple_backup/errors.log.old
-fi
-
-if [[ -f $HOME/.simple_backup/warnings.log.old ]]; then
-   rm -f $HOME/.simple_backup/warnings.log.old
 fi
 
 exit 0
