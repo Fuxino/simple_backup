@@ -20,7 +20,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.0.0"
+   echo "simple_backup, version 1.2.3"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
@@ -287,6 +287,7 @@ function parse_options {
 
                HOMEDIR="/home/$2"
                config="/home/$2/.simple_backup/config"
+               USER="$2"
                
                read_conf "$config"
                
@@ -398,6 +399,14 @@ else
    error_flag=0
 fi
 
+#Fix ownership and permissions of log files if needed
+if [[ ! -z $USER ]]; then
+   chown $USER:$USER $LOG && chmod 644 $LOG
+   chown $USER:$USER $ERR && chmod 644 $ERR
+   chown $USER:$USER $WARN && chmod 644 $WARN
+fi
+
+#Copy log files in home directory
 mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
 mv $ERR "$HOMEDIR/.simple_backup/errors.log"
 mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
