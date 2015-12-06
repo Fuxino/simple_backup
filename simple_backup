@@ -15,7 +15,6 @@
 #You should have received a copy of the GNU General Public License
 #along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#Version 1.2.2
 #Simple backup script. Reads options, sources and destination from a configuration file or standard input
 
 #Help function
