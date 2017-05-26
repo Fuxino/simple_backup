@@ -373,6 +373,8 @@ if [[ ! -z "$INPUTS" ]]; then
    sort "$INPUTS" -o "$INPUTS"
 fi
 
+echo "Copying files. This may take a long time..."
+
 if [[ -z "$LAST_BACKUP" ]]; then
    rsync -acrv -H -X -R --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
 else
