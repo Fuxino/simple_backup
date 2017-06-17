@@ -19,7 +19,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.3"
+   echo "simple_backup, version 1.3.1"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
@@ -259,10 +259,14 @@ function parse_options {
                   echo "$(date): Backup failed (see errors.log)" >> $LOG
                   echo "Backup failed"
                   echo "Error: user $2 doesn't exist" | tee -a $ERR
+                  
+                  if [[ ! -d "$HOMEDIR/.simple_backup" ]]; then
+                     mkdir "$HOMEDIR/.simple_backup"
+                  fi
 
-                  mv $LOG "HOMEDIR/.simple_backup/simple_backup.log"
-                  mv $ERR "HOMEDIR/.simple_bakup/errors.log"
-                  mv $WARN "HOMEDIR/.simple_backup/warnings.log"
+                  mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+                  mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+                  mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
                   exit 1
                fi
@@ -278,7 +282,7 @@ function parse_options {
                fi
 
                HOMEDIR="/home/$2"
-               config="/home/$2/.simple_backup/config"
+               CONFIG="/home/$2/.simple_backup/config"
                USER="$2"
                
                read_conf "$config"
@@ -350,7 +354,7 @@ if [[ -n $KEEP ]]; then
    N_BACKUP=$(($N_BACKUP-1))
 
    if [[ $N_BACKUP -gt $KEEP ]]; then
-      echo "$(date): Removing old backups" >> $LOG
+     echo "$(date): Removing old backups" >> $LOG
       echo "Removing old backups..."
       REMOVE=$(mktemp)
       find $BACKUP_DEV/simple_backup/* -maxdepth 0 -type d | sort | head -n $(($N_BACKUP - $KEEP)) >> $REMOVE
