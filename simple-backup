@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#Copyright 2015 Daniele Fucini <dfucini@gmail.com>
+#Copyright 2017 Daniele Fucini <dfucini@gmail.com>
 
 #This program is free software: you can redistribute it and/or modify
 #it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.3.2"
+   echo "simple_backup, version 1.3.3"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
@@ -56,6 +56,13 @@ function read_conf {
          echo "$(date): Backup failed (see errors.log)" >> $LOG
          echo "Backup failed"
          echo "Error: Configuration file not found" | tee $ERR
+         
+         #Fix ownership and permissions of log files if needed
+         if [[ ! -z $USER ]]; then
+            chown $USER:$USER $LOG && chmod 644 $LOG
+            chown $USER:$USER $ERR && chmod 644 $ERR
+            chown $USER:$USER $WARN && chmod 644 $WARN
+         fi
 
          mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
          mv $ERR "$HOMEDIR/.simple_backup/errors.log"
@@ -72,6 +79,14 @@ function read_conf {
          echo "$(date): Backup failed (see errors.log)" >> $LOG
          echo "Backup failed"
          echo "Error: Configuration file not found" | tee -a $ERR
+         
+         #Fix ownership and permissions of log files if needed
+         if [[ ! -z $USER ]]; then
+            chown $USER:$USER $LOG && chmod 644 $LOG
+            chown $USER:$USER $ERR && chmod 644 $ERR
+            chown $USER:$USER $WARN && chmod 644 $WARN
+         fi
+         
          mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
          mv $ERR "$HOMEDIR/.simple_backup/errors.log"
          mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
@@ -107,6 +122,13 @@ function read_conf {
       echo "Backup failed"
       echo "Error: Output folder \"$BACKUP_DEV\" not found" | tee -a $ERR
    
+      #Fix ownership and permissions of log files if needed
+      if [[ ! -z $USER ]]; then
+         chown $USER:$USER $LOG && chmod 644 $LOG
+         chown $USER:$USER $ERR && chmod 644 $ERR
+         chown $USER:$USER $WARN && chmod 644 $WARN
+      fi
+
       mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
       mv $ERR "$HOMEDIR/.simple_backup/errors.log"
       mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
@@ -124,7 +146,7 @@ function read_conf {
    if [[ ! -d "$BACKUP_DIR" ]]; then
       mkdir -p "$BACKUP_DIR/$DATE"
    else
-   #If previous backup(s) exist(s), save link to the last backup
+   #If previous backups exist, save link to the last backup
       LAST_BACKUP=$(readlink -f "$BACKUP_DIR/last_backup")
       mkdir "$BACKUP_DIR/$DATE"
    fi
@@ -139,7 +161,6 @@ function read_conf {
 
 #Parse options
 function parse_options {
-   i=1
    n_in=0
    
    #Create a temporary file to store inputs
@@ -167,25 +188,9 @@ function parse_options {
             do
                input="$2"
 
-               if [[ -z "$input" ]]; then
-                  echo "$(date): Backup failed (see errors.log)" >> $LOG
-                  echo "Backup failed"
-                  echo "Error: bad options format" | tee -a $ERR
-
-                  mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
-                  mv $ERR "$HOMEDIR/.simple_backup/errors.log"
-                  mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
-
-                  rm $INPUTS
-                  rm $EXCLUDE
-
-                  exit 1
-               fi
-
                if [[ ! -e "$input" ]]; then
-                 echo "Warning: input \"${INPUTS[$i]}\" not found. Skipping" | tee -a $WARN
+                 echo "Warning: input \"$input\" not found. Skipping" | tee -a $WARN
                else
-                  i=$((i+1))
                   n_in=$((n_in+1))
                   echo "$input" >> "$INPUTS"
                fi
@@ -203,12 +208,19 @@ function parse_options {
                echo "Backup failed"
                echo "Error: output folder \"$BACKUP_DEV\" not found" | tee -a $ERR
 
+               #Fix ownership and permissions of log files if needed
+               if [[ ! -z $USER ]]; then
+                  chown $USER:$USER $LOG && chmod 644 $LOG
+                  chown $USER:$USER $ERR && chmod 644 $ERR
+                  chown $USER:$USER $WARN && chmod 644 $WARN
+               fi
+
                mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
                mv $ERR "$HOMEDIR/.simple_backup/errors.log"
                mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
 
                rm $INPUTS
-               rm $EXCLUDES
+               rm $EXCLUDE
 
                exit 1
             fi
@@ -252,9 +264,6 @@ function parse_options {
             ;;
 
          -u | --user)
-               rm "$EXCLUDE"
-               rm "$INPUTS"
-
                if [[ ! -d "/home/$2" ]]; then
                   echo "$(date): Backup failed (see errors.log)" >> $LOG
                   echo "Backup failed"
@@ -262,6 +271,13 @@ function parse_options {
                   
                   if [[ ! -d "$HOMEDIR/.simple_backup" ]]; then
                      mkdir "$HOMEDIR/.simple_backup"
+                  fi
+
+                  #Fix ownership and permissions of log files if needed
+                  if [[ ! -z $USER ]]; then
+                     chown $USER:$USER $LOG && chmod 644 $LOG
+                     chown $USER:$USER $ERR && chmod 644 $ERR
+                     chown $USER:$USER $WARN && chmod 644 $WARN
                   fi
 
                   mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
@@ -275,25 +291,25 @@ function parse_options {
                   mkdir "/home/$2/.simple_backup"
 
                   echo "Created directory \"$HOMEDIR/.simple_backup\"." 
-                  echo "Copy there sample configuration and edit it"
-                  echo "to your needs before running the backup."
-
-                  exit 1
                fi
 
                HOMEDIR="/home/$2"
-               CONFIG="/home/$2/.simple_backup/config"
                USER="$2"
                
-               read_conf "$config"
-               
-               return
+               shift
             ;;
 
          *)
             echo "$(date): Backup failed (see errors.log)" >> $LOG
             echo "Backup failed"
             echo "Error: Option $1 not recognised. Use 'simple-backup -h' to see available options" | tee -a $ERR
+
+            #Fix ownership and permissions of log files if needed
+            if [[ ! -z $USER ]]; then
+               chown $USER:$USER $LOG && chmod 644 $LOG
+               chown $USER:$USER $ERR && chmod 644 $ERR
+               chown $USER:$USER $WARN && chmod 644 $WARN
+            fi
 
             mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
             mv $ERR "$HOMEDIR/.simple_backup/errors.log"
@@ -315,6 +331,7 @@ ERR=$(mktemp)
 WARN=$(mktemp)
 
 HOMEDIR="$HOME"
+OPTIONS="-arv -H -X -R" 
 
 #Check number of parameters
 if [[ "$#" -eq 0 ]]; then
@@ -323,7 +340,8 @@ if [[ "$#" -eq 0 ]]; then
 
       echo "Created directory \"$HOMEDIR/.simple_backup\"." 
       echo "Copy there sample configuration and edit it"
-      echo "to your needs before running the backup."
+      echo "to your needs before running the backup,"
+      echo "or pass options on the command line."
 
       exit 1
    fi
@@ -331,13 +349,53 @@ if [[ "$#" -eq 0 ]]; then
    read_conf
 else
    parse_options $@
+
+   if [[ $n_in -gt 0 && ( -z $BACKUP_DIR || ! -d $BACKUP_DIR ) ]]; then
+      #If the backup directory is not set or doesn't exist, exit
+      echo "$(date): Backup failed (see errors.log)" >> $LOG
+      echo "Backup failed"
+      echo "Error: Output folder \"$BACKUP_DEV\" not found" | tee -a $ERR
+   
+      #Fix ownership and permissions of log files if needed
+      if [[ ! -z $USER ]]; then
+         chown $USER:$USER $LOG && chmod 644 $LOG
+         chown $USER:$USER $ERR && chmod 644 $ERR
+         chown $USER:$USER $WARN && chmod 644 $WARN
+      fi
+
+      mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+      mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+      mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
+
+      exit 1      
+   elif [[ $n_in -eq 0 && -z $BACKUP_DIR ]]; then
+      if [[ ! -d "$HOMEDIR/.simple_backup" ]]; then
+         mkdir "$HOMEDIR/.simple_backup"
+
+         echo "Created directory \"$HOMEDIR/.simple_backup\"." 
+         echo "Copy there sample configuration and edit it"
+         echo "to your needs before running the backup,"
+         echo "or pass options on the command line."
+
+         exit 1
+      fi
+
+      read_conf $HOMEDIR/.simple_backup/config
+   fi
 fi
 
-if [[ -z $n_in || $n_in -eq 0 ]]; then
+if [[ $n_in -eq 0 ]]; then
    echo "$(date): Backup finished (no files copied)" >> $LOG
    echo "Backup finished"
    echo "Warning: no valid input selected. Nothing to do" | tee -a $WARN
                
+   #Fix ownership and permissions of log files if needed
+   if [[ ! -z $USER ]]; then
+      chown $USER:$USER $LOG && chmod 644 $LOG
+      chown $USER:$USER $ERR && chmod 644 $ERR
+      chown $USER:$USER $WARN && chmod 644 $WARN
+   fi
+
    mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
    mv $ERR "$HOMEDIR/.simple_backup/errors.log"
    mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
@@ -380,9 +438,9 @@ fi
 echo "Copying files. This may take a long time..."
 
 if [[ -z "$LAST_BACKUP" ]]; then
-   rsync -acrv -H -X -R --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
+   rsync $OPTIONS --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
 else
-   rsync -acrv -H -X -R --link-dest="$LAST_BACKUP" --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
+   rsync $OPTIONS --link-dest="$LAST_BACKUP" --exclude-from="$EXCLUDE" --files-from="$INPUTS" / "$BACKUP_DIR" --ignore-missing-args >> $LOG 2>> $ERR
 fi
 
 #Update the logs
