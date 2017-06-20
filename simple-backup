@@ -19,7 +19,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.3.3"
+   echo "simple_backup, version 1.3.4"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
@@ -331,7 +331,7 @@ ERR=$(mktemp)
 WARN=$(mktemp)
 
 HOMEDIR="$HOME"
-OPTIONS="-arv -H -X -R" 
+OPTIONS="-arvh -H -X -R" 
 
 #Check number of parameters
 if [[ "$#" -eq 0 ]]; then
