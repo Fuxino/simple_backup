@@ -19,7 +19,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.4"
+   echo "simple_backup, version 1.4.1"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
@@ -352,7 +352,7 @@ if [[ "$#" -eq 0 ]]; then
 
    read_conf
 else
-   parse_options $@
+   parse_options "$@"
 
    if [[ $n_in -gt 0 && ( -z $BACKUP_DIR || ! -d $BACKUP_DIR ) ]]; then
       #If the backup directory is not set or doesn't exist, exit
