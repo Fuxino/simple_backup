@@ -19,7 +19,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.3.3"
+   echo "simple_backup, version 1.4"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
@@ -36,8 +36,8 @@ function help_function {
    echo "                                       Default: keep all."
    echo "-u, --user        USER                 User performing the backup."
    echo "                                       Default: current user."
-   echo "                                       WARNING: This currently doesn't work with"
-   echo "                                       other options!"
+   echo "-s, --checksum                         Use the checksum rsync option to compare files"
+   echo "                                       (MUCH slower)."
    echo ""
    echo "If no option is given, the program uses the default"
    echo "configuration file: $HOMEDIR/.simple_backup/config."
@@ -264,40 +264,44 @@ function parse_options {
             ;;
 
          -u | --user)
-               if [[ ! -d "/home/$2" ]]; then
-                  echo "$(date): Backup failed (see errors.log)" >> $LOG
-                  echo "Backup failed"
-                  echo "Error: user $2 doesn't exist" | tee -a $ERR
+            if [[ ! -d "/home/$2" ]]; then
+               echo "$(date): Backup failed (see errors.log)" >> $LOG
+               echo "Backup failed"
+               echo "Error: user $2 doesn't exist" | tee -a $ERR
                   
-                  if [[ ! -d "$HOMEDIR/.simple_backup" ]]; then
-                     mkdir "$HOMEDIR/.simple_backup"
-                  fi
-
-                  #Fix ownership and permissions of log files if needed
-                  if [[ ! -z $USER ]]; then
-                     chown $USER:$USER $LOG && chmod 644 $LOG
-                     chown $USER:$USER $ERR && chmod 644 $ERR
-                     chown $USER:$USER $WARN && chmod 644 $WARN
-                  fi
-
-                  mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
-                  mv $ERR "$HOMEDIR/.simple_backup/errors.log"
-                  mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
-
-                  exit 1
+               if [[ ! -d "$HOMEDIR/.simple_backup" ]]; then
+                  mkdir "$HOMEDIR/.simple_backup"
                fi
 
-               if [[ ! -d "/home/$2/.simple_backup" ]]; then
-                  mkdir "/home/$2/.simple_backup"
-
-                  echo "Created directory \"$HOMEDIR/.simple_backup\"." 
+               #Fix ownership and permissions of log files if needed
+               if [[ ! -z $USER ]]; then
+                  chown $USER:$USER $LOG && chmod 644 $LOG
+                  chown $USER:$USER $ERR && chmod 644 $ERR
+                  chown $USER:$USER $WARN && chmod 644 $WARN
                fi
 
-               HOMEDIR="/home/$2"
-               USER="$2"
+               mv $LOG "$HOMEDIR/.simple_backup/simple_backup.log"
+               mv $ERR "$HOMEDIR/.simple_backup/errors.log"
+               mv $WARN "$HOMEDIR/.simple_backup/warnings.log"
+
+               exit 1
+            fi
+
+            if [[ ! -d "/home/$2/.simple_backup" ]]; then
+               mkdir "/home/$2/.simple_backup"
+
+               echo "Created directory \"$HOMEDIR/.simple_backup\"." 
+            fi
+
+            HOMEDIR="/home/$2"
+            USER="$2"
                
-               shift
+            shift
             ;;
+
+         -s | --checksum)
+            OPTIONS="-arcv -H -X -R"
+            ;;            
 
          *)
             echo "$(date): Backup failed (see errors.log)" >> $LOG
