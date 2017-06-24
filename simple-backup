@@ -19,7 +19,7 @@
 
 #Help function
 function help_function {
-   echo "simple_backup, version 1.4.1"
+   echo "simple_backup, version 1.4.2"
    echo ""
    echo "Usage: $0 [OPTIONS]"
    echo ""
