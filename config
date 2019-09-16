@@ -11,5 +11,5 @@ backup_dir=/media/Backup
 #Exclude patterns. Use a comma to separate items
 exclude=.gvfs,.cache*,[Cc]ache*,.thumbnails*,[Tt]rash*,*.backup*,*~,.dropbox*
 
-#Number of snapshots to keep (default: keep all)
-keep=
+#Number of snapshots to keep (use -1 to keep all)
+keep=-1
