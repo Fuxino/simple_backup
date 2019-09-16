@@ -17,7 +17,7 @@ install=${pkgname}.install
 source=(git+https://github.com/Fuxino/${pkgname}.git
         config)
 sha256sums=('SKIP'
-            'd8b88cbb4e6d9cae68c1605496880065337484dff8ee4c06dce2578357e95574')
+            '22ef4a0e9356daf3cabe93299c7a04b6b7283b14e6f2c07d939e24027eedf144')
 
 pkgver() 
 {  

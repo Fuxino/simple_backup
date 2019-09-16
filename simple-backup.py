@@ -38,7 +38,7 @@ class Backup():
 
     # Help function
     def help_function(self):
-        print('simple_backup, version 1.4.2')
+        print('simple_backup, version 2.0.0')
         print('')
         print('Usage: {} [OPTIONS]'.format(argv[0]))
         print('')
@@ -54,7 +54,7 @@ class Backup():
         print('-k, --keep        NUMBER               Specify the number of old backups to keep.')
         print('                                       Default: keep all.')
         print('-u, --user        USER                 User performing the backup.')
-        print('                                       Default: current user.')
+        print('                                       Useful when running with "sudo"')
         print('-s, --checksum                         Use the checksum rsync option to compare files')
         print('                                       (MUCH slower).')
         print('')
