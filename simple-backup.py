@@ -84,7 +84,7 @@ class Backup():
                 self.logfile.close()
                 self.errfile.close()
                 self.warnfile.close()
-            
+
                 move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                 move(self.err_path, self.homedir + '/.simple_backup/errors.log')
                 move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
@@ -105,7 +105,7 @@ class Backup():
                 self.logfile.close()
                 self.errfile.close()
                 self.warnfile.close()
-                
+
                 move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                 move(self.err_path, self.homedir + '/.simple_backup/errors.log')
                 move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
@@ -172,7 +172,7 @@ class Backup():
             self.logfile.close()
             self.errfile.close()
             self.warnfile.close()
-        
+
             move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
             move(self.err_path, self.homedir + '/.simple_backup/errors.log')
             move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
@@ -194,7 +194,7 @@ class Backup():
                     exit(1)
             else:
                 self.last_backup = ''
-        
+
         self.backup_dir = self.backup_dir + '/' + date
 
         try:
@@ -254,16 +254,10 @@ class Backup():
                     self.errfile.write(err_message)
                     self.errfile.write('\n')
 
-                    if self.user is not None:
-                        pass
-#                       chown $USER:$USER $LOG && chmod 644 $LOG
-#                       chown $USER:$USER $ERR && chmod 644 $ERR
-#                       chown $USER:$USER $WARN && chmod 644 $WARN
-
                     self.logfile.close()
                     self.errfile.close()
                     self.warnfile.close()
-                    
+
                     move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                     move(self.err_path, self.homedir + '/.simple_backup/errors.log')
                     move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
@@ -272,7 +266,7 @@ class Backup():
 
                 self.backup_dir = self.backup_dev + '/simple_backup'
                 date = str(datetime.now())
-    
+
                 # Create the backup subdirectory using date
                 if isdir(self.backup_dir):
                     #If previous backups exist, save link to the last backup
@@ -285,7 +279,7 @@ class Backup():
                             exit(1)
                     else:
                         self.last_backup = ''
-        
+
                 self.backup_dir = self.backup_dir + '/' + date
 
                 try:
@@ -326,16 +320,10 @@ class Backup():
                     self.errfile.write(err_message)
                     self.errfile.write('\n')
 
-                    if self.user is not None:
-                        pass
-#                       chown $USER:$USER $LOG && chmod 644 $LOG
-#                       chown $USER:$USER $ERR && chmod 644 $ERR
-#                       chown $USER:$USER $WARN && chmod 644 $WARN
-            
                     self.logfile.close()
                     self.errfile.close()
                     self.warnfile.close()
-                    
+
                     move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                     move(self.err_path, self.homedir + '/.simple_backup/errors.log')
                     move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
@@ -367,7 +355,7 @@ class Backup():
                 self.logfile.close()
                 self.errfile.close()
                 self.warnfile.close()
-                
+
                 move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                 move(self.err_path, self.homedir + '/.simple_backup/errors.log')
                 move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
@@ -394,7 +382,7 @@ class Backup():
                     '" --ignore-missing-args >> ' + self.log_path + ' 2>> ' + self.err_path
 
         subprocess.run(rsync, shell=True)
-        
+
         return
 
 def main():
@@ -448,7 +436,7 @@ def main():
         backup.logfile.close()
         backup.errfile.close()
         backup.warnfile.close()
-        
+
         move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
         move(backup.err_path, backup.homedir + '/.simple_backup/errors.log')
         move(backup.warn_path, backup.homedir + '/.simple_backup/warnings.log')
@@ -482,7 +470,7 @@ def main():
         backup.logfile.close()
         backup.errfile.close()
         backup.warnfile.close()
-        
+
         move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
         move(backup.err_path, backup.homedir + '/.simple_backup/errors.log')
         move(backup.warn_path, backup.homedir + '/.simple_backup/warnings.log')
