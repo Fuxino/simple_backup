@@ -81,13 +81,6 @@ class Backup():
                 self.errfile.write(err_message)
                 self.errfile.write('\n')
 
-                # Fix ownership and permissions of log files if needed
-                if self.user != None:
-                    pass
-#                   chown $USER:$USER $LOG && chmod 644 $LOG
-#                   chown $USER:$USER $ERR && chmod 644 $ERR
-#                   chown $USER:$USER $WARN && chmod 644 $WARN
-                
                 self.logfile.close()
                 self.errfile.close()
                 self.warnfile.close()
@@ -109,13 +102,6 @@ class Backup():
                 self.errfile.write(err_message)
                 self.errfile.write('\n')
 
-                # Fix ownership and permissions of log files if needed
-                if self.user != None: 
-                    pass
-#                   chown $USER:$USER $LOG && chmod 644 $LOG
-#                   chown $USER:$USER $ERR && chmod 644 $ERR
-#                   chown $USER:$USER $WARN && chmod 644 $WARN
-         
                 self.logfile.close()
                 self.errfile.close()
                 self.warnfile.close()
@@ -183,13 +169,6 @@ class Backup():
             self.errfile.write(err_message)
             self.errfile.write('\n')
 
-            # Fix ownership and permissions of log files if needed
-            if self.user != None:
-                pass
-#               chown $USER:$USER $LOG && chmod 644 $LOG
-#               chown $USER:$USER $ERR && chmod 644 $ERR
-#               chown $USER:$USER $WARN && chmod 644 $WARN
-                
             self.logfile.close()
             self.errfile.close()
             self.warnfile.close()
@@ -208,12 +187,24 @@ class Backup():
             # If previous backups exist, save link to the last backup
             self.last_backup = self.backup_dir + '/last_backup'
             if islink(self.last_backup):
-                self.last_backup = os.readlink(self.last_backup)
+                try:
+                    self.last_backup = os.readlink(self.last_backup)
+                except:
+                    print('An error occurred when reading the last_backup link')
+                    exit(1)
             else:
                 self.last_backup = ''
         
         self.backup_dir = self.backup_dir + '/' + date
-        os.makedirs(self.backup_dir)
+
+        try:
+            os.makedirs(self.backup_dir)
+        except PermissionError as e:
+            print(str(e))
+            exit(1)
+        except:
+            print('Failed to create backup directory')
+            exit(1)
 
         return
 
@@ -287,12 +278,24 @@ class Backup():
                     #If previous backups exist, save link to the last backup
                     self.last_backup = self.backup_dir + '/last_backup'
                     if islink(self.last_backup):
-                        self.last_backup = os.readlink(self.last_backup)
+                        try:
+                            self.last_backup = os.readlink(self.last_backup)
+                        except:
+                            print('An error occurred when reading the last_backup link')
+                            exit(1)
                     else:
                         self.last_backup = ''
         
                 self.backup_dir = self.backup_dir + '/' + date
-                os.makedirs(self.backup_dir)
+
+                try:
+                    os.makedirs(self.backup_dir)
+                except PermissionError as e:
+                    print(str(e))
+                    exit(1)
+                except:
+                    print('Failed to create backup directory')
+                    exit(1)
 
                 i = i + 1
             elif var == '-e' or var == '--exclude':
@@ -340,8 +343,12 @@ class Backup():
                     exit(1)
 
                 if not isdir(self.homedir + '/.simple_backup'):
-                    os.makedir(self.homedir + '/.simple_backup')
-                    print('Create directory "' + self.homedir + '/.simple_backup".')
+                    try:
+                        os.makedir(self.homedir + '/.simple_backup')
+                        print('Created directory "' + self.homedir + '/.simple_backup".')
+                    except:
+                        print('Failed to create .simple_backup directory in HOME')
+                        exit(1)
 
                 self.user = argv[i+1]
 
@@ -357,13 +364,6 @@ class Backup():
                 self.errfile.write(err_message)
                 self.errfile.write('\n')
 
-                # Fix ownership and permissions of log files if needed
-                if self.user is not None:
-                    pass
-#                   chown $USER:$USER $LOG && chmod 644 $LOG
-#                   chown $USER:$USER $ERR && chmod 644 $ERR
-#                   chown $USER:$USER $WARN && chmod 644 $WARN
-            
                 self.logfile.close()
                 self.errfile.close()
                 self.warnfile.close()
@@ -419,11 +419,14 @@ def main():
     if len(argv) == 1:
         # If simple backup directory doesn't exist, create it and exit
         if not isdir(backup.homedir + '/.simple_backup'):
-            os.makedir(backup.homedir + '/.simple_backup')
-            print('Created directory "' + backup.homedir + '/.simple_backup".')
-            print('Copy there the sample configuration and edit it')
-            print('to your needs before running the backup,')
-            print('or pass options on the command line.')
+            try:
+                os.makedir(backup.homedir + '/.simple_backup')
+                print('Created directory "' + backup.homedir + '/.simple_backup".')
+                print('Copy there the sample configuration and edit it')
+                print('to your needs before running the backup,')
+                print('or pass options on the command line.')
+            except:
+                print('Failed to create .simple_backup directory in HOME')
 
             exit(1)
 
@@ -442,13 +445,6 @@ def main():
         backup.errfile.write(err_message)
         backup.errfile.write('\n')
 
-        #Fix ownership and permissions of log files if needed
-        if backup.user is not None:
-            pass
-#            chown $USER:$USER $LOG && chmod 644 $LOG
-#            chown $USER:$USER $ERR && chmod 644 $ERR
-#            chown $USER:$USER $WARN && chmod 644 $WARN
-
         backup.logfile.close()
         backup.errfile.close()
         backup.warnfile.close()
@@ -460,11 +456,14 @@ def main():
         exit(1)
     elif backup.n_in == 0 and backup.backup_dir == '':
         if not isdir(backup.homedir + '/.simple_backup'):
-            os.makedir(backup.homedir + '/.simple_backup')
-            print('Created directory "' + backup.homedir + '/.simple_backup".')
-            print('Copy there the sample configuration and edit it')
-            print('to your needs before running the backup')
-            print('or pass options on the command line.')
+            try:
+                os.makedir(backup.homedir + '/.simple_backup')
+                print('Created directory "' + backup.homedir + '/.simple_backup".')
+                print('Copy there the sample configuration and edit it')
+                print('to your needs before running the backup')
+                print('or pass options on the command line.')
+            except:
+                print('Failed to create .simple_backup directory in HOME')
 
             exit(1)
 
@@ -480,13 +479,6 @@ def main():
         backup.warnfile.write('\n')
         print(warn_message)
                
-        #Fix ownership and permissions of log files if needed
-        if backup.user is None:
-            pass
-#            chown $USER:$USER $LOG && chmod 644 $LOG
-#            chown $USER:$USER $ERR && chmod 644 $ERR
-#            chown $USER:$USER $WARN && chmod 644 $WARN
-        
         backup.logfile.close()
         backup.errfile.close()
         backup.warnfile.close()
@@ -504,7 +496,11 @@ def main():
 
     #If specified, keep the last n backups and remove the others. Default: keep all
     if backup.keep > -1:
-        dirs = os.listdir(backup.backup_dev + '/simple_backup')
+        try:
+            dirs = os.listdir(backup.backup_dev + '/simple_backup')
+        except:
+            print('Failed to list backup directory')
+            exit(1)
         if dirs.count('last_backup') > 0:
             dirs.remove('last_backup')
         n_backup = len(dirs) - 1
@@ -558,13 +554,6 @@ def main():
         backup.logfile.write('\n')
         print('Backup finished')
 
-    # Fix ownership and permissions of log files if needed
-    if backup.user is not None:
-        pass
-#        chown $USER:$USER $LOG && chmod 644 $LOG
-#        chown $USER:$USER $ERR && chmod 644 $ERR
-#        chown $USER:$USER $WARN && chmod 644 $WARN
-    
     backup.logfile.close()
 
     # Copy log files in home directory
@@ -573,13 +562,22 @@ def main():
     move(backup.warn_path, backup.homedir + '/.simple_backup/warnings.log')
 
     if islink(backup.backup_dev + '/simple_backup/last_backup'):
-        os.remove(backup.backup_dev + '/simple_backup/last_backup')
+        try:
+            os.remove(backup.backup_dev + '/simple_backup/last_backup')
+        except:
+            print('Failed to remove last_backup link')
 
-    os.symlink(backup.backup_dir, backup.backup_dev + '/simple_backup/last_backup')
+    try:
+        os.symlink(backup.backup_dir, backup.backup_dev + '/simple_backup/last_backup')
+    except:
+        print('Failed to create last_backup link')
 
     # Delete temporary files
-    os.remove(backup.inputs_path)
-    os.remove(backup.exclude_path)
+    try:
+        os.remove(backup.inputs_path)
+        os.remove(backup.exclude_path)
+    except:
+        print('Failed to remove temporary files')
 
     exit(0)
 
