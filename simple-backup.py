@@ -32,7 +32,6 @@ class Backup():
         self.exclude_path = ''
         self.exclude = ''
         self.options = ''
-        self.user = ''
         self.keep = -1
         self.n_in = 0
 
@@ -53,8 +52,6 @@ class Backup():
         print('                                       the backup.')
         print('-k, --keep        NUMBER               Specify the number of old backups to keep.')
         print('                                       Default: keep all.')
-        print('-u, --user        USER                 User performing the backup.')
-        print('                                       Useful when running with "sudo"')
         print('-s, --checksum                         Use the checksum rsync option to compare files')
         print('                                       (MUCH slower).')
         print('')
@@ -309,38 +306,6 @@ class Backup():
                 self.read_conf(argv[i+1])
 
                 i = i + 1
-            elif var == '-u' or var == '--user':
-                self.homedir = '/home/' + argv[i+1]
-                if not isdir(self.homedir):
-                    log_message = str(datetime.now()) + ': Backup failed (see errors.log)'
-                    self.logfile.write(log_message)
-                    self.logfile.write('\n')
-                    print('Backup failed')
-                    err_message = 'Error: user "' + argv[i+1] + '"doesn\'t exist'
-                    self.errfile.write(err_message)
-                    self.errfile.write('\n')
-
-                    self.logfile.close()
-                    self.errfile.close()
-                    self.warnfile.close()
-
-                    move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
-                    move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                    move(self.warn_path, self.homedir + '/.simple_backup/warnings.log')
-
-                    exit(1)
-
-                if not isdir(self.homedir + '/.simple_backup'):
-                    try:
-                        os.makedir(self.homedir + '/.simple_backup')
-                        print('Created directory "' + self.homedir + '/.simple_backup".')
-                    except:
-                        print('Failed to create .simple_backup directory in HOME')
-                        exit(1)
-
-                self.user = argv[i+1]
-
-                i = i + 1
             elif var == '-s' or var == '--checksum':
                 self.options = '-arcvh -H -X'
             else:
@@ -400,7 +365,11 @@ def main():
     backup.warnfile = open(backup.warn_path, 'w')
 
     # Set homedir and default options
-    backup.homedir = expanduser('~')
+    try:
+        backup.homedir = '/home/' + os.environ['SUDO_USER']
+    except:
+        backup.homedir = expanduser('~')
+
     backup.options = '-arvh -H -X'
 
     # Check number of parameters
