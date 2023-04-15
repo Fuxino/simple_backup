@@ -3,12 +3,12 @@
 #Maintainer: Daniele Fucini <dfucini@gmail.com>
 #
 
-pkgname=simple-backup
+pkgname=simple_backup
 pkgver=2.0.0.r3.gc61c704
 pkgrel=1
 pkgdesc='Simple backup script that uses rsync to copy files'
 arch=('any')
-url="https://github.com/Fuxino/simple-backup.git"
+url="https://github.com/Fuxino/simple_backup.git"
 license=('GPL3')
 makedepends=('git')
 depends=('python3'
