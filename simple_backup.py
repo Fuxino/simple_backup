@@ -3,15 +3,66 @@
 # Import libraries
 from dotenv import load_dotenv
 import os
+from functools import wraps
 from shutil import rmtree
 import argparse
 import configparser
 import logging
 from logging import StreamHandler
 from logging.handlers import RotatingFileHandler
+from timeit import default_timer
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
+
+
+load_dotenv()
+euid = os.geteuid()
+
+if euid == 0:
+    user = os.getenv("SUDO_USER")
+    homedir = os.path.expanduser(f'~{user}')
+else:
+    homedir = os.getenv('HOME')
+
+logging.getLogger().setLevel(logging.DEBUG)
+logger = logging.getLogger(os.path.basename(__file__))
+c_handler = StreamHandler()
+
+try:
+    f_handler = RotatingFileHandler(f'{homedir}/.simple_backup/simple_backup.log', maxBytes=1024000, backupCount=5)
+except Exception:
+    f_handler = None
+
+c_handler.setLevel(logging.INFO)
+c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+c_handler.setFormatter(c_format)
+logger.addHandler(c_handler)
+
+if f_handler:
+    f_handler.setLevel(logging.INFO)
+    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    f_handler.setFormatter(f_format)
+    logger.addHandler(f_handler)
+
+
+def timing(_logger):
+    def decorater_timing(func):
+        @wraps(func)
+        def wrapper_timing(*args, **kwargs):
+            start = default_timer()
+
+            value = func(*args, **kwargs)
+
+            end = default_timer()
+
+            _logger.info(f'Elapsed time: {end - start:.3f} seconds')
+
+            return value
+
+        return wrapper_timing
+
+    return decorater_timing
 
 
 class MyFormatter(argparse.RawTextHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
@@ -47,7 +98,7 @@ class Backup:
                     self.inputs.append(i_new)
                 except Exception:
                     logger.warning(f'Input {i} is a link and cannot be read. Skipping')
-                    self.inpts.remove(i)
+                    self.inputs.remove(i)
 
         if not os.path.isdir(self.output):
             logger.critical('Output path for backup does not exist')
@@ -97,6 +148,7 @@ class Backup:
                 logger.error('Previous backup could not be read')
 
     # Function to read configuration file
+    @timing(logger)
     def run(self):
         logger.info('Starting backup...')
 
@@ -158,36 +210,6 @@ class Backup:
 
         if self._err_flag:
             logger.warning('Some errors occurred (check log for details)')
-
-
-load_dotenv()
-euid = os.geteuid()
-
-if euid == 0:
-    user = os.getenv("SUDO_USER")
-    homedir = os.path.expanduser(f'~{user}')
-else:
-    homedir = os.getenv('HOME')
-
-logging.getLogger().setLevel(logging.DEBUG)
-logger = logging.getLogger(os.path.basename(__file__))
-c_handler = StreamHandler()
-
-try:
-    f_handler = RotatingFileHandler(f'{homedir}/.simple_backup/simple_backup.log', maxBytes=1024000, backupCount=5)
-except Exception:
-    f_handler = None
-
-c_handler.setLevel(logging.INFO)
-c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-c_handler.setFormatter(c_format)
-logger.addHandler(c_handler)
-
-if f_handler:
-    f_handler.setLevel(logging.INFO)
-    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    f_handler.setFormatter(f_format)
-    logger.addHandler(f_handler)
 
 
 def _parse_arguments():
