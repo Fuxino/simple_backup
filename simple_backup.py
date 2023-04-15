@@ -37,6 +37,17 @@ class Backup:
 
             return False
 
+        for i in self.inputs:
+            if os.path.islink(i):
+                try:
+                    i_new = os.readlink(i)
+                    logger.info(f'Input {i} is a symbolic link referencing {i_new}. Copying {i_new} instead')
+                    self.inputs.remove(i)
+                    self.inputs.append(i_new)
+                except Exception:
+                    logger.warning(f'Input {i} is a link and cannot be read. Skipping')
+                    self.inpts.remove(i)
+
         if not os.path.isdir(self.output):
             logger.critical('Output path for backup does not exist')
 
@@ -147,7 +158,7 @@ if euid == 0:
 else:
     homedir = os.getenv('HOME')
 
-logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(os.path.basename(__file__))
 c_handler = StreamHandler()
 #f_handler = RotatingFileHandler(f'{homedir}/.simple_backup/simple_backup.log')
