@@ -9,7 +9,7 @@ import configparser
 import logging
 from logging import StreamHandler
 from logging.handlers import RotatingFileHandler
-import subprocess
+from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
 
@@ -30,6 +30,7 @@ class Backup:
         self._output_dir = ''
         self._inputs_path = ''
         self._exclude_path = ''
+        self._err_flag = False
 
     def check_params(self):
         if self.inputs is None or len(self.inputs) == 0:
@@ -93,11 +94,11 @@ class Backup:
             try:
                 self._last_backup = os.readlink(f'{self.output}/simple_backup/last_backup')
             except Exception:
-                logger.warning('No previous backup could be read')
+                logger.error('Previous backup could not be read')
 
     # Function to read configuration file
     def run(self):
-        logger.info('Starting backup')
+        logger.info('Starting backup...')
 
         self.create_backup_dir()
         self.find_last_backup()
@@ -107,6 +108,7 @@ class Backup:
                 os.remove(f'{self.output}/simple_backup/last_backup')
             except Exception:
                 logger.error('Failed to remove last_backup link')
+                self._err_flag = True
 
         inputs_handle, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
         exclude_handle, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
@@ -135,18 +137,27 @@ class Backup:
                     f'{self._exclude_path} --files-from={self._inputs_path} / "{self._output_dir}" ' +\
                     '--ignore-missing-args'
 
-        subprocess.run(rsync, shell=True)
+        p = Popen(rsync, stdout=PIPE, stderr=STDOUT, shell=True)
+        output, _ = p.communicate()
+
+        logger.info(f'Output of rsync command: {output.decode("utf-8")}')
 
         try:
             os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup')
         except Exception:
             logger.error('Failed to create last_backup link')
+            self._err_flag = True
 
         if self.keep != -1:
             self.remove_old_backups()
 
         os.remove(self._inputs_path)
         os.remove(self._exclude_path)
+
+        logger.info('Backup completed')
+
+        if self._err_flag:
+            logger.warning('Some errors occurred (check log for details)')
 
 
 load_dotenv()
@@ -161,16 +172,22 @@ else:
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(os.path.basename(__file__))
 c_handler = StreamHandler()
-#f_handler = RotatingFileHandler(f'{homedir}/.simple_backup/simple_backup.log')
-f_handler = RotatingFileHandler(f'./simple_backup.log', maxBytes=1024000, backupCount=5)
+
+try:
+    f_handler = RotatingFileHandler(f'{homedir}/.simple_backup/simple_backup.log', maxBytes=1024000, backupCount=5)
+except Exception:
+    f_handler = None
+
 c_handler.setLevel(logging.INFO)
-f_handler.setLevel(logging.INFO)
 c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
 logger.addHandler(c_handler)
-logger.addHandler(f_handler)
+
+if f_handler:
+    f_handler.setLevel(logging.INFO)
+    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    f_handler.setFormatter(f_format)
+    logger.addHandler(f_handler)
 
 
 def _parse_arguments():

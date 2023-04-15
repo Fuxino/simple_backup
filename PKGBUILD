@@ -12,7 +12,8 @@ url="https://github.com/Fuxino/simple_backup.git"
 license=('GPL3')
 makedepends=('git')
 depends=('python3'
-         'rsync')
+         'rsync'
+         'python-dotenv')
 install=${pkgname}.install
 source=(git+https://github.com/Fuxino/${pkgname}.git)
 sha256sums=('SKIP')
