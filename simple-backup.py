@@ -12,11 +12,12 @@ import subprocess
 from datetime import datetime
 from tempfile import mkstemp
 
-class Backup():
+
+class Backup:
 
     def __init__(self, *args, **kwargs):
         super(Backup, self).__init__(*args, **kwargs)
-        
+
         self.log_path = ''
         self.logfile = None
         self.err_path = ''
@@ -36,7 +37,8 @@ class Backup():
         self.n_in = 0
 
     # Help function
-    def help_function(self):
+    @staticmethod
+    def help_function():
         print('simple_backup, version 2.0.0')
         print('')
         print('Usage: {} [OPTIONS]'.format(argv[0]))
@@ -68,7 +70,7 @@ class Backup():
             config = self.homedir + '/.simple_backup/config'
 
             if not isfile(config):
-            # If default config file doesn't exist, exit
+                # If default config file doesn't exist, exit
                 log_message = str(datetime.now()) + ': Backup failed (see errors.log)'
                 self.logfile.write(log_message)
                 self.logfile.write('\n')
@@ -85,12 +87,12 @@ class Backup():
                 try:
                     move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                     move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                except:
+                except Exception:
                     print('Failed to create logs in {}'.format(self.homedir))
 
                 try:
                     os.remove(self.warn_path)
-                except:
+                except Exception:
                     print('Failed to remove temporary file')
 
                 exit(1)
@@ -113,12 +115,12 @@ class Backup():
                 try:
                     move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                     move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                except:
+                except Exception:
                     print('Failed to create logs in {}'.format(self.homedir))
 
                 try:
                     os.remove(self.warn_path)
-                except:
+                except Exception:
                     print('Failed to remove temporary file')
 
                 exit(1)
@@ -139,7 +141,6 @@ class Backup():
                 if line[:7] == 'inputs=':
                     line = line[7:].rstrip()
                     input_values = line.split(',')
-                    n_in = 0
                     for i in input_values:
                         if not exists(i):
                             warn_message = 'Warning: input "' + i + '" not found. Skipping'
@@ -187,14 +188,14 @@ class Backup():
             try:
                 move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                 move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to create logs in {}'.format(self.homedir))
 
             try:
                 os.remove(self.warn_path)
                 os.remove(self.inputs_path)
                 os.remove(self.exclude_path)
-            except:
+            except Exception:
                 print('Failed to remove temporary files')
 
             exit(1)
@@ -209,7 +210,7 @@ class Backup():
             if islink(self.last_backup):
                 try:
                     self.last_backup = os.readlink(self.last_backup)
-                except:
+                except Exception:
                     self.last_backup = ''
                     err_message = 'An error occurred when reading the last_backup link. Continuing anyway'
                     print(err_message)
@@ -239,18 +240,18 @@ class Backup():
             try:
                 move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                 move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to create logs in {}'.format(self.homedir))
 
             try:
                 os.remove(self.warn_path)
                 os.remove(self.inputs_path)
                 os.remove(self.exclude_path)
-            except:
+            except Exception:
                 print('Failed to remove temporary files')
 
             exit(1)
-        except:
+        except Exception:
             log_message = str(datetime.now()) + 'Backup failed (see errors.log)'
             self.logfile.write(log_message)
             self.logfile.write('\n')
@@ -266,19 +267,17 @@ class Backup():
             try:
                 move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                 move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to create logs in {}'.format(self.homedir))
 
             try:
                 os.remove(self.warn_path)
                 os.remove(self.inputs_path)
                 os.remove(self.exclude_path)
-            except:
+            except Exception:
                 print('Failed to remove temporary files')
 
             exit(1)
-
-        return
 
     # Function to parse options
     def parse_options(self):
@@ -294,9 +293,9 @@ class Backup():
         while i < len(argv):
             var = argv[i]
 
-            if var == '-h' or var == '--help':
+            if var in ['-h', '--help']:
                 self.help_function()
-            elif var == '-i' or var == '--input':
+            elif var in ['-i', '--input']:
                 val = argv[i+1]
                 while i < len(argv) - 1 and val[0] != '-':
                     inp = val
@@ -313,7 +312,7 @@ class Backup():
 
                     i = i + 1
                     val = argv[i+1]
-            elif var == '-d' or var == '--directory':
+            elif var in ['-d', '--directory']:
                 self.backup_dev = argv[i+1]
                 self.backup_dev = abspath(self.backup_dev)
 
@@ -336,14 +335,14 @@ class Backup():
                     try:
                         move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                         move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                    except:
+                    except Exception:
                         print('Failed to create logs in {}'.format(self.homedir))
 
                     try:
                         os.remove(self.warn_path)
                         os.remove(self.inputs_path)
                         os.remove(self.exclude_path)
-                    except:
+                    except Exception:
                         print('Failed to remove temporary files')
 
                     exit(1)
@@ -353,12 +352,12 @@ class Backup():
 
                 # Create the backup subdirectory using date
                 if isdir(self.backup_dir):
-                    #If previous backups exist, save link to the last backup
+                    # If previous backups exist, save link to the last backup
                     self.last_backup = self.backup_dir + '/last_backup'
                     if islink(self.last_backup):
                         try:
                             self.last_backup = os.readlink(self.last_backup)
-                        except:
+                        except Exception:
                             self.last_backup = ''
                             err_message = 'An error occurred when reading the last_backup link. Continuing anyway'
                             print(err_message)
@@ -390,18 +389,18 @@ class Backup():
                     try:
                         move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                         move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                    except:
+                    except Exception:
                         print('Failed to create logs in {}'.format(self.homedir))
 
                     try:
                         os.remove(self.warn_path)
                         os.remove(self.inputs_path)
                         os.remove(self.exclude_path)
-                    except:
+                    except Exception:
                         print('Failed to remove temporary files')
 
                     exit(1)
-                except:
+                except Exception:
                     log_message = str(datetime.now()) + 'Backup failed (see errors.log)'
                     self.logfile.write(log_message)
                     self.logfile.write('\n')
@@ -420,20 +419,20 @@ class Backup():
                     try:
                         move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                         move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                    except:
+                    except Exception:
                         print('Failed to create logs in {}'.format(self.homedir))
 
                     try:
                         os.remove(self.warn_path)
                         os.remove(self.inputs_path)
                         os.remove(self.exclude_path)
-                    except:
+                    except Exception:
                         print('Failed to remove temporary files')
 
                     exit(1)
 
                 i = i + 1
-            elif var == '-e' or var == '--exclude':
+            elif var in ['-e', '--exclude']:
                 val = argv[i+1]
                 while i < len(argv) - 1 and val[0] != '-':
                     exc = val
@@ -442,22 +441,23 @@ class Backup():
 
                     i = i + 1
                     val = argv[i+1]
-            elif var == '-k' or var == '--keep':
+            elif var in ['-k', '--keep']:
                 self.keep = int(argv[i+1])
 
                 i = i + 1
-            elif var == '-c' or var == '--config':
+            elif var in ['-c', '--config']:
                 self.read_conf(argv[i+1])
 
                 i = i + 1
-            elif var == '-s' or var == '--checksum':
+            elif var in ['-s', '--checksum']:
                 self.options = '-arcvh -H -X'
             else:
                 log_message = str(datetime.now()) + ': Backup failed (see errors.log)'
                 self.logfile.write(log_message)
                 self.logfile.write('\n')
                 print('Backup failed')
-                err_message = 'Error: Option "' + var + '" not recognised. Use "simple-backup -h" to see available options'
+                err_message = 'Error: Option "' + var +\
+                              '" not recognised. Use "simple-backup -h" to see available options'
                 print(err_message)
                 self.errfile.write(err_message)
                 self.errfile.write('\n')
@@ -471,14 +471,14 @@ class Backup():
                 try:
                     move(self.log_path, self.homedir + '/.simple_backup/simple_backup.log')
                     move(self.err_path, self.homedir + '/.simple_backup/errors.log')
-                except:
+                except Exception:
                     print('Failed to create logs in {}'.format(self.homedir))
 
                 try:
                     os.remove(self.warn_path)
                     os.remove(self.inputs_path)
                     os.remove(self.exclude_path)
-                except:
+                except Exception:
                     print('Failed to remove temporary files')
 
                 exit(1)
@@ -487,8 +487,6 @@ class Backup():
 
         self.inputs.close()
         self.exclude.close()
-
-        return
 
     def exec_(self):
         print('Copying files. This may take a long time...')
@@ -504,7 +502,6 @@ class Backup():
 
         subprocess.run(rsync, shell=True)
 
-        return
 
 def main():
 
@@ -523,7 +520,7 @@ def main():
     # Set homedir and default options
     try:
         backup.homedir = '/home/' + os.environ['SUDO_USER']
-    except:
+    except Exception:
         backup.homedir = expanduser('~')
 
     backup.options = '-arvh -H -X'
@@ -533,11 +530,11 @@ def main():
         # If simple backup directory doesn't exist, create it and exit
         if not isdir(backup.homedir + '/.simple_backup'):
             try:
-                os.makedir(backup.homedir + '/.simple_backup')
+                os.mkdir(backup.homedir + '/.simple_backup')
                 log_message = 'Created directory "' + backup.homedir + '/.simple_backup".\n' +\
-                        'Copy there the sample configuration and edit it\n' +\
-                        'to your needs before running the backup,\n' +\
-                        'or pass options directly on the command line.'
+                              'Copy there the sample configuration and edit it\n' +\
+                              'to your needs before running the backup,\n' +\
+                              'or pass options directly on the command line.'
                 backup.logfile.write(log_message)
                 backup.logfile.write('\n')
                 print(log_message)
@@ -548,15 +545,15 @@ def main():
 
                 try:
                     move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
-                except:
+                except Exception:
                     print('Failed to create logs in {}'.format(backup.homedir))
 
                 try:
                     os.remove(backup.err_path)
                     os.remove(backup.warn_path)
-                except:
+                except Exception:
                     print('Failed to remove temporary files')
-            except:
+            except Exception:
                 print('Failed to create .simple_backup directory in {}'.format(backup.homedir))
 
                 backup.logfile.close()
@@ -567,7 +564,7 @@ def main():
                     os.remove(backup.log_path)
                     os.remove(backup.err_path)
                     os.remove(backup.warn_path)
-                except:
+                except Exception:
                     print('Failed to remove temporary files')
 
             exit(1)
@@ -578,14 +575,14 @@ def main():
         # Parse command line options
         backup.parse_options()
 
-        if backup.n_in > 0 and (backup.backup_dir == '' or 
-                not isdir(backup.backup_dir)):
-            #If the backup directory is not set or doesn't exist, exit
+        if backup.n_in > 0 and (backup.backup_dir == '' or
+                                not isdir(backup.backup_dir)):
+            # If the backup directory is not set or doesn't exist, exit
             log_message = str(datetime.now()) + ': Backup failed (see errors.log)'
             backup.logfile.write(log_message)
             backup.logfile.write('\n')
             print('Backup failed')
-            err_message = 'Error: Output folder "' + backup.backup_dev.getBackupDev + '" not found'
+            err_message = 'Error: Output folder "' + backup.backup_dev + '" not found'
             print(err_message)
             backup.errfile.write(err_message)
             backup.errfile.write('\n')
@@ -597,25 +594,25 @@ def main():
             try:
                 move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
                 move(backup.err_path, backup.homedir + '/.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to create logs in {}'.format(backup.homedir))
 
             try:
                 os.remove(backup.warn_path)
                 os.remove(backup.inputs_path)
                 os.remove(backup.exclude_path)
-            except:
+            except Exception:
                 print('Failed to remove temporary files')
 
             exit(1)
         elif backup.n_in == 0 and backup.backup_dir == '':
             if not isdir(backup.homedir + '/.simple_backup'):
                 try:
-                    os.makedir(backup.homedir + '/.simple_backup')
+                    os.mkdir(backup.homedir + '/.simple_backup')
                     log_message = 'Created directory "' + backup.homedir + '/.simple_backup".\n' +\
-                            'Copy there the sample configuration and edit it\n' +\
-                            'to your needs before running the backup,\n' +\
-                            'or pass options directly on the command line.'
+                                  'Copy there the sample configuration and edit it\n' +\
+                                  'to your needs before running the backup,\n' +\
+                                  'or pass options directly on the command line.'
                     backup.logfile.write(log_message)
                     backup.logfile.write('\n')
                     print(log_message)
@@ -626,7 +623,7 @@ def main():
 
                     try:
                         move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
-                    except:
+                    except Exception:
                         print('Failed to create logs in {}'.format(backup.homedir))
 
                     try:
@@ -634,9 +631,9 @@ def main():
                         os.remove(backup.warn_path)
                         os.remove(backup.inputs_path)
                         os.remove(backup.exclude_path)
-                    except:
+                    except Exception:
                         print('Failed to remove temporary files')
-                except:
+                except Exception:
                     print('Failed to create .simple_backup directory in {}'.format(backup.homedir))
 
                     backup.logfile.close()
@@ -649,7 +646,7 @@ def main():
                         os.remove(backup.warn_path)
                         os.remove(backup.inputs_path)
                         os.remove(backup.exclude_path)
-                    except:
+                    except Exception:
                         print('Failed to remove temporary files')
 
                 exit(1)
@@ -657,7 +654,7 @@ def main():
             try:
                 os.remove(backup.inputs_path)
                 os.remove(backup.exclude_path)
-            except:
+            except Exception:
                 print('Failed to remove temporary files')
 
             backup.read_conf(backup.homedir + '/.simple_backup/config')
@@ -679,14 +676,14 @@ def main():
         try:
             move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
             move(backup.warn_path, backup.homedir + '/.simple_backup/warnings.log')
-        except:
+        except Exception:
             print('Failed to create logs in {}'.format(backup.homedir))
 
         try:
             os.remove(backup.err_path)
             os.remove(backup.inputs_path)
             os.remove(backup.exclude_path)
-        except:
+        except Exception:
             print('Failed to remove temporary files')
 
         exit(0)
@@ -696,11 +693,11 @@ def main():
     backup.logfile.write('\n')
     print('Starting backup...')
 
-    #If specified, keep the last n backups and remove the others. Default: keep all
+    # If specified, keep the last n backups and remove the others. Default: keep all
     if backup.keep > -1:
         try:
             dirs = os.listdir(backup.backup_dev + '/simple_backup')
-        except:
+        except Exception:
             err_message = 'Failed to access backup directory'
             backup.errfile.write(err_message)
             backup.errfile.write('\n')
@@ -713,14 +710,14 @@ def main():
             try:
                 move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
                 move(backup.err_path, backup.homedir + '.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to create logs in {}'.format(backup.homedir))
 
             try:
                 os.remove(backup.warn_path)
                 os.remove(backup.inputs_path)
                 os.remove(backup.exclude_path)
-            except:
+            except Exception:
                 print('Failed to remove temporary files')
 
             exit(1)
@@ -741,7 +738,7 @@ def main():
                     log_message = 'Removed backup: ' + dirs[i]
                     backup.logfile.write(log_message)
                     backup.logfile.write('\n')
-                except:
+                except Exception:
                     err_message = 'Error while removing backup ' + dirs[i]
                     backup.errfile.write(err_message)
                     backup.errfile.write('\n')
@@ -759,7 +756,7 @@ def main():
     if islink(backup.backup_dev + '/simple_backup/last_backup'):
         try:
             os.remove(backup.backup_dev + '/simple_backup/last_backup')
-        except:
+        except Exception:
             err_message = 'Failed to remove last_backup link'
             backup.errfile.write(err_message)
             backup.errfile.write('\n')
@@ -767,7 +764,7 @@ def main():
 
     try:
         os.symlink(backup.backup_dir, backup.backup_dev + '/simple_backup/last_backup')
-    except:
+    except Exception:
         err_message = 'Failed to create last_backup link'
         backup.errfile.write(err_message)
         backup.errfile.write('\n')
@@ -784,12 +781,12 @@ def main():
 
         try:
             move(backup.err_path, backup.homedir + '/.simple_backup/errors.log')
-        except:
+        except Exception:
             print('Failed to create logs in {}'.format(backup.homedir))
 
         try:
             os.remove(backup.warn_path)
-        except:
+        except Exception:
             print('Failed to remove temporary file')
     elif os.stat(backup.warn_path).st_size > 0:
         log_message = str(datetime.now()) + ': Backup finished with warnings (see warnings.log)'
@@ -799,18 +796,18 @@ def main():
 
         try:
             move(backup.warn_path, backup.homedir + '/.simple_backup/warnings.log')
-        except:
+        except Exception:
             print('Failed to create logs in {}'.format(backup.homedir))
 
         try:
             os.remove(backup.err_path)
-        except:
+        except Exception:
             print('Failed to remove temporary file')
 
         if isfile(backup.homedir + '/.simple_backup/errors.log'):
             try:
                 os.remove(backup.homedir + '/.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to remove old logs')
     else:
         log_message = str(datetime.now()) + ': Backup finished'
@@ -821,18 +818,18 @@ def main():
         try:
             os.remove(backup.err_path)
             os.remove(backup.warn_path)
-        except:
+        except Exception:
             print('Failed to remove temporary files')
 
         if isfile(backup.homedir + '/.simple_backup/errors.log'):
             try:
                 os.remove(backup.homedir + '/.simple_backup/errors.log')
-            except:
+            except Exception:
                 print('Failed to remove old logs')
         if isfile(backup.homedir + '/.simple_backup/warnings.log'):
             try:
                 os.remove(backup.homedir + '/.simple_backup/warnings.log')
-            except:
+            except Exception:
                 print('Failed to remove old logs')
 
     backup.logfile.close()
@@ -840,17 +837,18 @@ def main():
     # Copy log files in home directory
     try:
         move(backup.log_path, backup.homedir + '/.simple_backup/simple_backup.log')
-    except:
+    except Exception:
         print('Failed to create logs in {}'.format(backup.homedir))
 
     # Delete temporary files
     try:
         os.remove(backup.inputs_path)
         os.remove(backup.exclude_path)
-    except:
+    except Exception:
         print('Failed to remove temporary files')
 
     exit(0)
+
 
 if __name__ == '__main__':
     main()
