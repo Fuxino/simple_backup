@@ -223,7 +223,7 @@ def _parse_arguments():
                                      epilog='Report bugs to dfucini<at>gmail<dot>com',
                                      formatter_class=MyFormatter)
 
-    parser.add_argument('-c', '--config', default=f'{homedir}/.simple_backup/simple_backup.config',
+    parser.add_argument('-c', '--config', default=f'{homedir}/.config/simple_backup/simple_backup.config',
                         help='Specify location of configuration file')
     parser.add_argument('-i', '--input', nargs='+', help='Paths/files to backup')
     parser.add_argument('-o', '--output', help='Output directory for the backup')
