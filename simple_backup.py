@@ -1,20 +1,24 @@
 #!/usr/bin/python3
 
 # Import libraries
-from dotenv import load_dotenv
 import os
 from functools import wraps
-import dbus
 from shutil import rmtree
 import argparse
 import configparser
 import logging
 from logging import StreamHandler
-from logging.handlers import RotatingFileHandler
 from timeit import default_timer
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
+import dbus
+from dotenv import load_dotenv
+
+try:
+    from systemd import journal
+except ImportError:
+    pass
 
 
 load_dotenv()
@@ -30,25 +34,23 @@ logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(os.path.basename(__file__))
 c_handler = StreamHandler()
 
-try:
-    f_handler = RotatingFileHandler(f'{homedir}/.simple_backup/simple_backup.log', maxBytes=1024000, backupCount=5)
-except Exception:
-    f_handler = None
-
 c_handler.setLevel(logging.INFO)
 c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 c_handler.setFormatter(c_format)
 logger.addHandler(c_handler)
 
-if f_handler:
-    f_handler.setLevel(logging.INFO)
-    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    f_handler.setFormatter(f_format)
-    logger.addHandler(f_handler)
+try:
+    j_handler = journal.JournalHandler()
+    j_handler.setLevel(logging.INFO)
+    j_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%Y-%m-%dT%H:%M:%S%z')
+    j_handler.setFormatter(j_format)
+    logger.addHandler(j_handler)
+except NameError:
+    pass
 
 
 def timing(_logger):
-    def decorater_timing(func):
+    def decorator_timing(func):
         @wraps(func)
         def wrapper_timing(*args, **kwargs):
             start = default_timer()
@@ -63,7 +65,7 @@ def timing(_logger):
 
         return wrapper_timing
 
-    return decorater_timing
+    return decorator_timing
 
 
 class MyFormatter(argparse.RawTextHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
@@ -163,8 +165,8 @@ class Backup:
                 logger.error('Failed to remove last_backup link')
                 self._err_flag = True
 
-        inputs_handle, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
-        exclude_handle, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
+        _, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
+        _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
 
         with open(self._inputs_path, 'w') as fp:
             for i in self.inputs:
