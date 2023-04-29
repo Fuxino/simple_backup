@@ -13,7 +13,8 @@ license=('GPL3')
 makedepends=('git')
 depends=('python3'
          'rsync'
-         'python-dotenv')
+         'python-dotenv'
+         'python-dbus')
 install=${pkgname}.install
 source=(git+https://github.com/Fuxino/${pkgname}.git)
 sha256sums=('SKIP')

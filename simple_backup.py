@@ -4,6 +4,7 @@
 from dotenv import load_dotenv
 import os
 from functools import wraps
+import dbus
 from shutil import rmtree
 import argparse
 import configparser
@@ -211,6 +212,10 @@ class Backup:
         if self._err_flag:
             logger.warning('Some errors occurred (check log for details)')
 
+            return 1
+
+        return 0
+
 
 def _parse_arguments():
     parser = argparse.ArgumentParser(prog='simple_backup',
@@ -275,7 +280,15 @@ def simple_backup():
     backup = Backup(inputs, output, exclude, keep, backup_options)
 
     if backup.check_params():
-        backup.run()
+        obj = dbus.SessionBus().get_object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+        obj = dbus.Interface(obj, "org.freedesktop.Notifications")
+        obj.Notify("simple_backup", 0, "", "Starting backup...", "", [], {"urgency": 1}, 10000)
+        status = backup.run()
+
+        if status == 0:
+            obj.Notify("simple_backup", 0, "", "Backup finished.", "", [], {"urgency": 1}, 10000)
+        else:
+            obj.Notify("simple_backup", 0, "", "Backup finished. Some errors occurred.", "", [], {"urgency": 1}, 10000)
 
 
 if __name__ == '__main__':
