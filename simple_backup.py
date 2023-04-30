@@ -42,7 +42,7 @@ logger.addHandler(c_handler)
 try:
     j_handler = journal.JournalHandler()
     j_handler.setLevel(logging.INFO)
-    j_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%Y-%m-%dT%H:%M:%S%z')
+    j_format = logging.Formatter('%(levelname)s - %(message)s')
     j_handler.setFormatter(j_format)
     logger.addHandler(j_handler)
 except NameError:
