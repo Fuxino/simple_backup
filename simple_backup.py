@@ -195,7 +195,10 @@ class Backup:
         p = Popen(rsync, stdout=PIPE, stderr=STDOUT, shell=True)
         output, _ = p.communicate()
 
-        logger.info(f'Output of rsync command: {output.decode("utf-8")}')
+        output = output.decode("utf-8").split('\n')
+
+        logger.info(f'rsync: {output[-3]}')
+        logger.info(f'rsync: {output[-2]}')
 
         try:
             os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup')
