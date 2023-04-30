@@ -14,7 +14,8 @@ makedepends=('git')
 depends=('python3'
          'rsync'
          'python-dotenv'
-         'python-dbus')
+         'python-dbus'
+         'python-systemd')
 install=${pkgname}.install
 source=(git+https://github.com/Fuxino/${pkgname}.git)
 sha256sums=('SKIP')
