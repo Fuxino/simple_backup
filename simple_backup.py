@@ -299,15 +299,22 @@ def simple_backup():
     backup = Backup(inputs, output, exclude, keep, backup_options)
 
     if backup.check_params():
-        obj = dbus.SessionBus().get_object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
-        obj = dbus.Interface(obj, "org.freedesktop.Notifications")
-        obj.Notify("simple_backup", 0, "", "Starting backup...", "", [], {"urgency": 1}, 10000)
+        try:
+            obj = dbus.SessionBus().get_object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+            obj = dbus.Interface(obj, "org.freedesktop.Notifications")
+            obj.Notify("simple_backup", 0, "", "Starting backup...", "", [], {"urgency": 1}, 10000)
+        except dbus.exceptions.DBusException:
+            pass
+
         status = backup.run()
 
-        if status == 0:
-            obj.Notify("simple_backup", 0, "", "Backup finished.", "", [], {"urgency": 1}, 10000)
-        else:
-            obj.Notify("simple_backup", 0, "", "Backup finished. Some errors occurred.", "", [], {"urgency": 1}, 10000)
+        try:
+            if status == 0:
+                obj.Notify("simple_backup", 0, "", "Backup finished.", "", [], {"urgency": 1}, 10000)
+            else:
+                obj.Notify("simple_backup", 0, "", "Backup finished. Some errors occurred.", "", [], {"urgency": 1}, 10000)
+        except NameError:
+            pass
 
 
 if __name__ == '__main__':
