@@ -132,6 +132,7 @@ class Backup:
             dirs.remove('last_backup')
 
         n_backup = len(dirs) - 1
+        count = 0
 
         if n_backup > self.keep:
             logger.info('Removing old backups...')
@@ -140,8 +141,14 @@ class Backup:
             for i in range(n_backup - self.keep):
                 try:
                     rmtree(f'{self.output}/simple_backup/{dirs[i]}')
+                    count += 1
                 except Exception:
                     logger.error(f'Error while removing backup {dirs[i]}')
+
+            if count == 1:
+                logger.info(f'Removed {count} backup')
+            else:
+                logger.info(f'Removed {count} backups')
 
     def find_last_backup(self):
         if os.path.islink(f'{self.output}/simple_backup/last_backup'):
