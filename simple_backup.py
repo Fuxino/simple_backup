@@ -103,10 +103,17 @@ class Backup:
                     logger.warning(f'Input {i} is a link and cannot be read. Skipping')
                     self.inputs.remove(i)
 
+        if self.output is None:
+            logger.critical('No output path specified. Use -o argument or specify output path in configuration file')
+
+            return False
+
         if not os.path.isdir(self.output):
             logger.critical('Output path for backup does not exist')
 
             return False
+
+        self.output = os.path.abspath(self.output)
 
         if self.keep is None:
             self.keep = -1
@@ -236,7 +243,7 @@ class Backup:
 
 def _parse_arguments():
     parser = argparse.ArgumentParser(prog='simple_backup',
-                                     description='A simple backup script written in Python that uses rsync to copy files',
+                                     description='Simple backup script written in Python that uses rsync to copy files',
                                      epilog='Report bugs to dfucini<at>gmail<dot>com',
                                      formatter_class=MyFormatter)
 
@@ -294,8 +301,6 @@ def simple_backup():
     else:
         backup_options = '-arvh -H -X'
 
-    output = os.path.abspath(output)
-
     backup = Backup(inputs, output, exclude, keep, backup_options)
 
     if backup.check_params():
@@ -304,17 +309,20 @@ def simple_backup():
             obj = dbus.Interface(obj, "org.freedesktop.Notifications")
             obj.Notify("simple_backup", 0, "", "Starting backup...", "", [], {"urgency": 1}, 10000)
         except dbus.exceptions.DBusException:
-            pass
+            obj = None
 
         status = backup.run()
 
-        try:
+        if obj is not None:
             if status == 0:
                 obj.Notify("simple_backup", 0, "", "Backup finished.", "", [], {"urgency": 1}, 10000)
             else:
-                obj.Notify("simple_backup", 0, "", "Backup finished. Some errors occurred.", "", [], {"urgency": 1}, 10000)
-        except NameError:
-            pass
+                obj.Notify("simple_backup", 0, "", "Backup finished. Some errors occurred.",
+                           "", [], {"urgency": 1}, 10000)
+
+        return 0
+
+    return 1
 
 
 if __name__ == '__main__':
