@@ -148,7 +148,12 @@ class Backup:
             try:
                 self._last_backup = os.readlink(f'{self.output}/simple_backup/last_backup')
             except Exception:
-                logger.error('Previous backup could not be read')
+                logger.warning('Previous backup could not be read')
+        else:
+            logger.info('No previous backups available')
+
+        if not os.path.isdir(self._last_backup):
+            logger.warning('Previous backup could not be read')
 
     # Function to read configuration file
     @timing(logger)
@@ -281,6 +286,8 @@ def simple_backup():
         backup_options = '-arcvh -H -X'
     else:
         backup_options = '-arvh -H -X'
+
+    output = os.path.abspath(output)
 
     backup = Backup(inputs, output, exclude, keep, backup_options)
 
