@@ -29,5 +29,5 @@ pkgver()
 package()
 {
    install -Dm755 "${srcdir}/${pkgname}/${pkgname}.py" "${pkgdir}/usr/bin/${pkgname}"
-   install -Dm644 "${srcdir}/${pkgname}/${pkgname}.config" "${pkgdir}/etc/${pkgname}/${pkgname}.config"
+   install -Dm644 "${srcdir}/${pkgname}/${pkgname}.config" "${pkgdir}/etc/${pkgname}/${pkgname}.conf"
 }
