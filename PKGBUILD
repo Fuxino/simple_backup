@@ -1,7 +1,6 @@
-#Arch Linux PKGBUILD
-#
-#Maintainer: Daniele Fucini <dfucini@gmail.com>
-#
+# PKGBUILD
+
+# Maintainer: Daniele Fucini <dfucini@gmail.com>
 
 pkgname=simple_backup
 pkgver=3.1.2.r0.geb8bdde
@@ -10,8 +9,9 @@ pkgdesc='Simple backup script that uses rsync to copy files'
 arch=('any')
 url="https://github.com/Fuxino/simple_backup.git"
 license=('GPL3')
-makedepends=('git')
-depends=('python3'
+makedepends=('git'
+             'python-setuptools')
+depends=('python'
          'rsync'
          'python-dotenv'
          'python-dbus'
@@ -22,12 +22,18 @@ sha256sums=('SKIP')
 
 pkgver() 
 {  
-   cd "$pkgname"
+   cd ${pkgname}
    git describe --long --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+build()
+{
+   cd ${srcdir}/${pkgname}
+   python3 setup.py build
 }
 
 package()
 {
-   install -Dm755 "${srcdir}/${pkgname}/${pkgname}.py" "${pkgdir}/usr/bin/${pkgname}"
-   install -Dm644 "${srcdir}/${pkgname}/${pkgname}.conf" "${pkgdir}/etc/${pkgname}/${pkgname}.conf"
+   cd ${srcdir}/${pkgname}
+   python3 setup.py install --root=${pkgdir} --optimize=1 --skip-build
 }
