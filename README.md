@@ -27,12 +27,19 @@ To install the program, first clone the repository:
 git clone https://github.com/Fuxino/simple_backup.git
 ```
 
+Install tools required to build and install the package:
+
+```bash
+pip install --upgrade build installer wheel
+```
+
 Then run:
 
 ```bash
 cd simple_backup
 python -m build --wheel
 python -m installer dist/*.whl
+```
 
 For Arch Linux, a PKGBUILD that automates this process is provided.
 
