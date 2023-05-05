@@ -10,15 +10,14 @@ arch=('any')
 url="https://github.com/Fuxino/simple_backup.git"
 license=('GPL3')
 makedepends=('git'
-            'python-setuptools'
-            'python-build'
-            'python-installer'
-            'python-wheel')
+             'python-setuptools'
+             'python-build'
+             'python-installer'
+             'python-wheel')
 depends=('python'
          'rsync'
-         'python-dotenv'
-         'python-dbus'
-         'python-systemd')
+         'python-dotenv')
+optdepends=('python-systemd: use systemd log')
 install=${pkgname}.install
 source=(git+https://github.com/Fuxino/${pkgname}.git)
 sha256sums=('SKIP')

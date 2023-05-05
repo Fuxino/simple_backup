@@ -12,7 +12,6 @@ from timeit import default_timer
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
-import dbus
 from dotenv import load_dotenv
 
 try:
@@ -236,10 +235,6 @@ class Backup:
         if self._err_flag:
             logger.warning('Some errors occurred (check log for details)')
 
-            return 1
-
-        return 0
-
 
 def _parse_arguments():
     parser = argparse.ArgumentParser(prog='simple_backup',
@@ -304,21 +299,7 @@ def simple_backup():
     backup = Backup(inputs, output, exclude, keep, backup_options)
 
     if backup.check_params():
-        try:
-            obj = dbus.SessionBus().get_object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
-            obj = dbus.Interface(obj, "org.freedesktop.Notifications")
-            obj.Notify("simple_backup", 0, "", "Starting backup...", "", [], {"urgency": 1}, 10000)
-        except dbus.exceptions.DBusException:
-            obj = None
-
-        status = backup.run()
-
-        if obj is not None:
-            if status == 0:
-                obj.Notify("simple_backup", 0, "", "Backup finished.", "", [], {"urgency": 1}, 10000)
-            else:
-                obj.Notify("simple_backup", 0, "", "Backup finished. Some errors occurred.",
-                           "", [], {"urgency": 1}, 10000)
+        backup.run()
 
         return 0
 
