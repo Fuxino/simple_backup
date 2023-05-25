@@ -162,16 +162,6 @@ class Backup:
         self.create_backup_dir()
         self.find_last_backup()
 
-        if os.path.islink(f'{self.output}/simple_backup/last_backup'):
-            try:
-                os.remove(f'{self.output}/simple_backup/last_backup')
-            except FileNotFoundError:
-                logger.error('Failed to remove last_backup link. File not found')
-                self._err_flag = True
-            except PermissionError:
-                logger.error('Failed to remove last_backup link. Permission denied')
-                self._err_flag = True
-
         _, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
         _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
 
@@ -206,6 +196,16 @@ class Backup:
 
         logger.info(f'rsync: {output[-3]}')
         logger.info(f'rsync: {output[-2]}')
+
+        if os.path.islink(f'{self.output}/simple_backup/last_backup'):
+            try:
+                os.remove(f'{self.output}/simple_backup/last_backup')
+            except FileNotFoundError:
+                logger.error('Failed to remove last_backup link. File not found')
+                self._err_flag = True
+            except PermissionError:
+                logger.error('Failed to remove last_backup link. Permission denied')
+                self._err_flag = True
 
         try:
             os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup', target_is_directory=True)
