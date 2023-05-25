@@ -19,12 +19,17 @@ try:
 except ImportError:
     journal = None
 
+try:
+    import dbus
+except ImportError:
+    pass
+
 
 load_dotenv()
 euid = os.geteuid()
 
 if euid == 0:
-    user = os.getenv("SUDO_USER")
+    user = os.getenv('SUDO_USER')
     homedir = os.path.expanduser(f'~{user}')
 else:
     homedir = os.getenv('HOME')
@@ -160,6 +165,11 @@ class Backup:
     def run(self):
         logger.info('Starting backup...')
 
+        try:
+            notify('Starting backup...')
+        except NameError:
+            pass
+
         self.create_backup_dir()
         self.find_last_backup()
 
@@ -234,6 +244,13 @@ class Backup:
         if self._err_flag:
             logger.warning('Some errors occurred (check log for details)')
 
+            try:
+                notify('Backup finished with errors (check log for details)')
+            except NameError:
+                pass
+        else:
+            notify('Backup finished')
+
 
 def _parse_arguments():
     parser = argparse.ArgumentParser(prog='simple_backup',
@@ -274,6 +291,24 @@ def _read_config(config_file):
     keep = config.getint('default', 'keep')
 
     return inputs, output, exclude, keep
+
+
+def notify(text):
+    euid = os.geteuid()
+
+    if euid == 0:
+        uid = os.getenv('SUDO_UID')
+    else:
+        uid = os.geteuid()
+
+    os.seteuid(int(uid))
+    os.environ['DBUS_SESSION_BUS_ADDRESS'] = f'unix:path=/run/user/{uid}/bus'
+
+    obj = dbus.SessionBus().get_object('org.freedesktop.Notifications', '/org/freedesktop/Notifications')
+    obj = dbus.Interface(obj, 'org.freedesktop.Notifications')
+    obj.Notify('', 0, '', 'simple_backup', text, [], {'urgency': 1}, 10000)
+
+    os.seteuid(int(euid))
 
 
 def simple_backup():

@@ -17,7 +17,8 @@ makedepends=('git'
 depends=('python'
          'rsync'
          'python-dotenv')
-optdepends=('python-systemd: use systemd log')
+optdepends=('python-systemd: use systemd log'
+            'python-dbus: for desktop notifications')
 install=${pkgname}.install
 source=(git+https://github.com/Fuxino/${pkgname}.git)
 sha256sums=('SKIP')
