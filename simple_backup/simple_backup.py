@@ -71,12 +71,13 @@ class MyFormatter(argparse.RawTextHelpFormatter, argparse.ArgumentDefaultsHelpFo
 
 class Backup:
 
-    def __init__(self, inputs, output, exclude, keep, options):
+    def __init__(self, inputs, output, exclude, keep, options, remove_before=False):
         self.inputs = inputs
         self.output = output
         self.exclude = exclude
         self.options = options
         self.keep = keep
+        self.remove_before = remove_before
         self._last_backup = ''
         self._output_dir = ''
         self._inputs_path = ''
@@ -178,6 +179,9 @@ class Backup:
                 fp.write(e)
                 fp.write('\n')
 
+        if self.keep != -1 and self.remove_before:
+            self.remove_old_backups()
+
         logger.info('Copying files. This may take a long time...')
 
         if self._last_backup == '':
@@ -219,7 +223,7 @@ class Backup:
             logger.error('Failed to create last_backup link. Permission denied')
             self._err_flag = True
 
-        if self.keep != -1:
+        if self.keep != -1 and not self.remove_before:
             self.remove_old_backups()
 
         os.remove(self._inputs_path)
@@ -245,6 +249,8 @@ def _parse_arguments():
     parser.add_argument('-k', '--keep', type=int, help='Number of old backups to keep')
     parser.add_argument('-s', '--checksum', action='store_true',
                         help='Use checksum rsync option to compare files (MUCH SLOWER)')
+    parser.add_argument('--remove-before-backup', action='store_true',
+                        help='Remove old backups before executing the backup, instead of after')
 
     args = parser.parse_args()
 
@@ -291,7 +297,7 @@ def simple_backup():
     else:
         backup_options = '-arvh -H -X'
 
-    backup = Backup(inputs, output, exclude, keep, backup_options)
+    backup = Backup(inputs, output, exclude, keep, backup_options, remove_before=args.remove_before_backup)
 
     if backup.check_params():
         backup.run()
