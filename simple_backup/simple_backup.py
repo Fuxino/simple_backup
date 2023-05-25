@@ -192,6 +192,9 @@ class Backup:
         p = Popen(rsync, stdout=PIPE, stderr=STDOUT, shell=True)
         output, _ = p.communicate()
 
+        if p.returncode != 0:
+            self._err_flag = True
+
         output = output.decode("utf-8").split('\n')
 
         logger.info(f'rsync: {output[-3]}')
