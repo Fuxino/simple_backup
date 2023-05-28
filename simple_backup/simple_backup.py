@@ -119,6 +119,9 @@ class Backup:
         if self._remote:
             self._ssh = self._ssh_connection()
 
+            if self._ssh is None:
+                sys.exit(1)
+
             _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self.output}" ]; then echo "ok"; fi')
 
             if stdout.read().decode('utf-8').strip() != 'ok':
@@ -214,8 +217,23 @@ class Backup:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
+        agent = paramiko.Agent()
+        agent_keys = agent.get_keys()
+
+        for key in agent_keys:
+            try:
+                ssh.connect(self.host, username=self.username, pkey=key)
+                return ssh
+            except paramiko.SSHException:
+                pass
+
         pkey = None
         password = None
+
+        if self.ssh_keyfile is None:
+            logger.critical('Can\'t connect to the server. No key specified')
+
+            return None
 
         try:
             pkey = RSAKey.from_private_key_file(self.ssh_keyfile)
