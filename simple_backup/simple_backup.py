@@ -94,11 +94,13 @@ class Backup:
         self.ssh_keyfile = ssh_keyfile
         self.remove_before = remove_before
         self._last_backup = ''
+        self._server = ''
         self._output_dir = ''
         self._inputs_path = ''
         self._exclude_path = ''
         self._remote = None
         self._err_flag = False
+        self._ssh = None
 
     def check_params(self):
         if self.inputs is None or len(self.inputs) == 0:
@@ -115,8 +117,14 @@ class Backup:
             self._remote = True
 
         if self._remote:
-            # TODO
-            pass
+            self._ssh = self._ssh_connection()
+
+            _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self.output}" ]; then echo "ok"; fi')
+
+            if stdout.read().decode('utf-8').strip() != 'ok':
+                logger.critical('Output path for backup does not exist')
+
+                return False
         else:
             if not os.path.isdir(self.output):
                 logger.critical('Output path for backup does not exist')
@@ -136,7 +144,7 @@ class Backup:
         self._output_dir = f'{self.output}/simple_backup/{now}'
 
         if self._remote:
-            self._output_dir = f'{self.username}@{self.host}:{self._output_dir}'
+            self._server = f'{self.username}@{self.host}:'
 
     def remove_old_backups(self):
         if self._remote:
@@ -175,8 +183,22 @@ class Backup:
 
     def find_last_backup(self):
         if self._remote:
-            # TODO
-            pass
+            if self._ssh is None:
+                logger.critical('SSH connection to server failed')
+                sys.exit(1)
+
+            _, stdout, _ = self._ssh.exec_command(f'readlink -v {self.output}/simple_backup/last_backup')
+            last_backup = stdout.read().decode('utf-8').strip()
+
+            if last_backup != '':
+                _, stdout, _ = self._ssh.exec_command(f'if [ -d "{last_backup}" ]; then echo "ok"; fi')
+
+                if stdout.read().decode('utf-8').strip() == 'ok':
+                    self._last_backup = last_backup
+                else:
+                    logger.info('No previous backups available')
+            else:
+                logger.info('No previous backups available')
         else:
             if os.path.islink(f'{self.output}/simple_backup/last_backup'):
                 link = os.readlink(f'{self.output}/simple_backup/last_backup')
@@ -277,11 +299,11 @@ class Backup:
 
         if self._last_backup == '':
             rsync = f'rsync {self.options} --exclude-from={self._exclude_path} ' +\
-                    f'--files-from={self._inputs_path} / "{self._output_dir}" ' +\
+                    f'--files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
                     '--ignore-missing-args --mkpath --protect-args'
         else:
             rsync = f'rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
-                    f'{self._exclude_path} --files-from={self._inputs_path} / "{self._output_dir}" ' +\
+                    f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
                     '--ignore-missing-args --mkpath --protect-args'
 
         p = Popen(rsync, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=True)
@@ -297,8 +319,14 @@ class Backup:
         logger.info(f'rsync: {output[-2]}')
 
         if self._remote:
-            # TODO
-            pass
+            _, stdout, _ = self._ssh.exec_command(f'if [ -L "{self.output}/simple_backup/last_backup" ]; then echo "ok"; fi')
+
+            if stdout.read().decode('utf-8').strip() == 'ok':
+                _, _, stderr = self._ssh.exec_command(f'rm "{self.output}/simple_backup/last_backup"')
+
+                if stderr.read().decode('utf-8').strip() != '':
+                    logger.error(stderr.read().decode('utf-8'))
+                    self._err_flag = True
         else:
             if os.path.islink(f'{self.output}/simple_backup/last_backup'):
                 try:
@@ -311,8 +339,11 @@ class Backup:
                     self._err_flag = True
 
         if self._remote:
-            # TODO
-            pass
+            _, _, stderr = self._ssh.exec_command(f'ln -s "{self._output_dir}" "{self.output}/simple_backup/last_backup"')
+
+            if stderr.read().decode('utf-8').strip() != '':
+                logger.error(stderr.read().decode('utf-8'))
+                self._err_flag = True
         else:
             try:
                 os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup', target_is_directory=True)
