@@ -124,7 +124,9 @@ class Backup:
 
             _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self.output}" ]; then echo "ok"; fi')
 
-            if stdout.read().decode('utf-8').strip() != 'ok':
+            output = stdout.read().decode('utf-8').strip()
+
+            if output != 'ok':
                 logger.critical('Output path for backup does not exist')
 
                 return False
@@ -151,9 +153,30 @@ class Backup:
 
     def remove_old_backups(self):
         if self._remote:
-            # TODO
+            _, stdout, _ = self._ssh.exec_command(f'ls {self.output}/simple_backup')
+
+            dirs = stdout.read().decode('utf-8').strip().split('\n')
+
+            if dirs.count('last_backup') > 0:
+                dirs.remove('last_backup')
+
+            n_backup = len(dirs) - 1
             count = 0
-            pass
+
+            if n_backup > self.keep:
+                logger.info('Removing old backups...')
+                dirs.sort()
+
+                for i in range(n_backup - self.keep):
+                    _, _, stderr = self._ssh.exec_command(f'rm -r "{self.output}/simple_backup/{dirs[i]}"')
+
+                    err = stderr.read().decode('utf-8').strip().split('\n')[0]
+
+                    if err != '':
+                        logger.error(f'Error while removing backup {dirs[i]}.')
+                        logger.error(err)
+                    else:
+                        count += 1
         else:
             try:
                 dirs = os.listdir(f'{self.output}/simple_backup')
@@ -196,7 +219,9 @@ class Backup:
             if last_backup != '':
                 _, stdout, _ = self._ssh.exec_command(f'if [ -d "{last_backup}" ]; then echo "ok"; fi')
 
-                if stdout.read().decode('utf-8').strip() == 'ok':
+                output = stdout.read().decode('utf-8').strip()
+
+                if output == 'ok':
                     self._last_backup = last_backup
                 else:
                     logger.info('No previous backups available')
@@ -333,17 +358,25 @@ class Backup:
 
         output = output.decode("utf-8").split('\n')
 
-        logger.info(f'rsync: {output[-3]}')
-        logger.info(f'rsync: {output[-2]}')
+        if self._err_flag:
+            logger.error(f'rsync: {output[-3]}')
+            logger.error(f'rsync: {output[-2]}')
+        else:
+            logger.info(f'rsync: {output[-3]}')
+            logger.info(f'rsync: {output[-2]}')
 
         if self._remote:
             _, stdout, _ = self._ssh.exec_command(f'if [ -L "{self.output}/simple_backup/last_backup" ]; then echo "ok"; fi')
 
-            if stdout.read().decode('utf-8').strip() == 'ok':
+            output = stdout.read().decode('utf-8').strip()
+
+            if output == 'ok':
                 _, _, stderr = self._ssh.exec_command(f'rm "{self.output}/simple_backup/last_backup"')
 
-                if stderr.read().decode('utf-8').strip() != '':
-                    logger.error(stderr.read().decode('utf-8'))
+                err = stderr.read().decode('utf-8').strip()
+
+                if err != '':
+                    logger.error(err)
                     self._err_flag = True
         else:
             if os.path.islink(f'{self.output}/simple_backup/last_backup'):
@@ -356,13 +389,15 @@ class Backup:
                     logger.error('Failed to remove last_backup link. Permission denied')
                     self._err_flag = True
 
-        if self._remote:
+        if self._remote and not self._err_flag:
             _, _, stderr = self._ssh.exec_command(f'ln -s "{self._output_dir}" "{self.output}/simple_backup/last_backup"')
 
-            if stderr.read().decode('utf-8').strip() != '':
-                logger.error(stderr.read().decode('utf-8'))
+            err = stderr.read().decode('utf-8').strip()
+
+            if err != '':
+                logger.error(err)
                 self._err_flag = True
-        else:
+        elif not self._remote:
             try:
                 os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup', target_is_directory=True)
             except FileExistsError:
@@ -385,7 +420,7 @@ class Backup:
         logger.info('Backup completed')
 
         if self._err_flag:
-            logger.warning('Some errors occurred (check log for details)')
+            logger.warning('Some errors occurred')
 
             try:
                 notify('Backup finished with errors (check log for details)')
