@@ -5,6 +5,7 @@ import sys
 import os
 from functools import wraps
 from shutil import rmtree
+import shlex
 import argparse
 import configparser
 import logging
@@ -341,15 +342,16 @@ class Backup:
         logger.info('Copying files. This may take a long time...')
 
         if self._last_backup == '':
-            rsync = f'rsync {self.options} --exclude-from={self._exclude_path} ' +\
+            rsync = f'/usr/bin/rsync {self.options} --exclude-from={self._exclude_path} ' +\
                     f'--files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
                     '--ignore-missing-args --mkpath --protect-args'
         else:
-            rsync = f'rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
+            rsync = f'/usr/bin/rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
                     f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
                     '--ignore-missing-args --mkpath --protect-args'
 
-        p = Popen(rsync, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=True)
+        args = shlex.split(rsync)
+        p = Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
 
         output, _ = p.communicate()
 
@@ -448,7 +450,8 @@ def _parse_arguments():
     parser.add_argument('-u', '--username', help='Username to connect to server (for remote backup)')
     parser.add_argument('--keyfile', help='SSH key location')
     parser.add_argument('-s', '--checksum', action='store_true',
-                        help='Use checksum rsync option to compare files (MUCH SLOWER)')
+                        help='Use checksum rsync option to compare files')
+    parser.add_argument('-z', '--compress', action='store_true', help='Compress data during the transfer')
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
 
@@ -528,10 +531,15 @@ def simple_backup():
     if args.keyfile is not None:
         ssh_keyfile = args.keyfile
 
+    backup_options = ['-a', '-r', '-v', '-h', '-H', '-X']
+
     if args.checksum:
-        backup_options = '-arcvh -H -X'
-    else:
-        backup_options = '-arvh -H -X'
+        backup_options.append('-c')
+
+    if args.compress:
+        backup_options.append('-z')
+
+    backup_options = ' '.join(backup_options)
 
     backup = Backup(inputs, output, exclude, keep, backup_options, host, username,
                     ssh_keyfile, remove_before=args.remove_before_backup)
