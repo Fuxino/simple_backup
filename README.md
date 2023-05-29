@@ -45,3 +45,12 @@ For Arch Linux, a PKGBUILD that automates this process is provided.
 
 After installing, copy simple_backup.conf (if you used the PKGBUILD on Arch, it will be in /etc/simple_backup/) to $HOME/.config/simple_backup and edit is as needed.
 
+## Remote backup
+> **Warning**
+> This feature is experimental
+
+It's possible to use a remote server as destination for the backup. Just use the --username and --host arguments (or set them in the configuration file).
+For this to work, rsync must be installed on the server too.
+
+### Server authentication
+Right now only authentication using SSH key works. If an ssh-agent is running on your system, available ssh keys will be used automatically. Otherwise, it's possible to specify the key location. Note that if no ssh agent is running, it might be necessary to unlock the private key more than once.
