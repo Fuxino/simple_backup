@@ -17,7 +17,8 @@ makedepends=('python-setuptools'
              'python-wheel')
 depends=('python'
          'rsync'
-         'python-dotenv')
+         'python-dotenv'
+         'python-paramiko')
 optdepends=('python-systemd: use systemd log'
             'python-dbus: for desktop notifications')
 conflicts=('simple_backup-git')
