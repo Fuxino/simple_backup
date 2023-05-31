@@ -14,6 +14,7 @@ Classes:
 # Import libraries
 import sys
 import os
+import warnings
 from functools import wraps
 from shutil import rmtree
 import shlex
@@ -30,6 +31,8 @@ from getpass import getpass
 from dotenv import load_dotenv
 import paramiko
 from paramiko import RSAKey, Ed25519Key, ECDSAKey, DSSKey
+
+warnings.filterwarnings('error')
 
 
 try:
@@ -298,30 +301,42 @@ class Backup:
 
     def _ssh_connection(self):
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.load_system_host_keys()
+        ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
 
-        agent = paramiko.Agent()
-        agent_keys = agent.get_keys()
+        try:
+            ssh.connect(self.host, username=self.username)
 
-        for key in agent_keys:
-            try:
-                ssh.connect(self.host, username=self.username, pkey=key)
-                return ssh
-            except paramiko.SSHException:
-                pass
+            return ssh
+        except UserWarning:
+            k = input(f'Unknown key for host {self.host}. Continue anyway? (Y/N) ')
+
+            if k[0].upper() == 'Y':
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            else:
+                return None
+        except paramiko.SSHException:
+            pass
+
+        try:
+            ssh.connect(self.host, username=self.username)
+
+            return ssh
+        except paramiko.SSHException:
+            pass
 
         pkey = None
         password = None
 
         if self.ssh_keyfile is None:
-            logger.critical('Can\'t connect to the server. No key specified')
+            logger.critical('Can\'t connect to the server. No authentication method available')
 
             return None
 
         try:
             pkey = RSAKey.from_private_key_file(self.ssh_keyfile)
         except paramiko.PasswordRequiredException:
-            password = getpass()
+            password = getpass(f'Enter passwphrase for key \'{self.ssh_keyfile}\': ')
 
             try:
                 pkey = RSAKey.from_private_key_file(self.ssh_keyfile, password)
@@ -357,8 +372,8 @@ class Backup:
 
         try:
             ssh.connect(self.host, username=self.username, pkey=pkey)
-        except paramiko.SSHException as e:
-            logger.error(e)
+        except paramiko.SSHException:
+            logger.critical('SSH connection to server failed')
 
             return None
 
