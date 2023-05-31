@@ -391,9 +391,10 @@ class Backup:
                     fp.write('\n')
 
         with open(self._exclude_path, 'w', encoding='utf-8') as fp:
-            for e in self.exclude:
-                fp.write(e)
-                fp.write('\n')
+            if self.exclude is not None:
+                for e in self.exclude:
+                    fp.write(e)
+                    fp.write('\n')
 
         if self.keep != -1 and self.remove_before:
             self.remove_old_backups()
