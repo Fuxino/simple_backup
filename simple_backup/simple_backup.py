@@ -425,6 +425,9 @@ class Backup:
                     f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
                     '--ignore-missing-args --mkpath --protect-args'
 
+        if euid == 0 and self.ssh_keyfile is not None:
+            rsync = f'{rsync} -e \'ssh -i {self.ssh_keyfile}\''
+
         args = shlex.split(rsync)
 
         with Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) as p:
@@ -436,8 +439,7 @@ class Backup:
         output = output.decode("utf-8").split('\n')
 
         if self._err_flag:
-            logger.error('rsync: %s', output[-3])
-            logger.error('rsync: %s', output[-2])
+            logger.error('rsync: %s', output)
         else:
             logger.info('rsync: %s', output[-3])
             logger.info('rsync: %s', output[-2])

@@ -49,8 +49,14 @@ After installing, copy simple_backup.conf (if you used the PKGBUILD on Arch, it 
 > **Warning**
 > This feature is experimental
 
-It's possible to use a remote server as destination for the backup. Just use the --username and --host arguments (or set them in the configuration file).
+It's possible to use a remote server as destination for the backup. Just use the --username (or -u) and --host arguments (or set them in the configuration file).
 For this to work, rsync must be installed on the server too.
 
 ### Server authentication
-Right now only authentication using SSH key works. If an ssh-agent is running on your system, available ssh keys will be used automatically. Otherwise, it's possible to specify the key location. Note that if no ssh agent is running, it might be necessary to unlock the private key more than once.
+Right now only authentication using SSH key works. If an ssh-agent is running on your system, available ssh keys will be used automatically. Otherwise, it's possible to specify the key location with --keyfile or in the configuration file. Note that if no ssh agent is running, it might be necessary to unlock the private key more than once.
+
+To be able to connect to the user authentication agent when running simple_backup with sudo, use:
+
+```bash
+sudo --preserve-env=SSH_AUTH_SOCK -s simple_backup [options]
+```
