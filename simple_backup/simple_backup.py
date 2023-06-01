@@ -516,7 +516,7 @@ class Backup:
 def _parse_arguments():
     parser = argparse.ArgumentParser(prog='simple_backup',
                                      description='Simple backup script written in Python that uses rsync to copy files',
-                                     epilog='Report bugs to dfucini<at>gmail<dot>com',
+                                     epilog='See simple_backup(1) manpage for full documentation',
                                      formatter_class=MyFormatter)
 
     parser.add_argument('-c', '--config', default=f'{homedir}/.config/simple_backup/simple_backup.conf',
