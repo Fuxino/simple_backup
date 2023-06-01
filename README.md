@@ -41,7 +41,9 @@ python -m build --wheel
 python -m installer dist/*.whl
 ```
 
-For Arch Linux, a PKGBUILD that automates this process is provided.
+For Arch Linux and Arch-based distros, two packages are available in the AUR (aur.archlinux.org):
+- **simple_backup** for the release version
+- **simple_backup-git** for the git version
 
 After installing, copy simple_backup.conf (if you used the PKGBUILD on Arch, it will be in /etc/simple_backup/) to $HOME/.config/simple_backup and edit is as needed.
 
