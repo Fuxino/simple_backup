@@ -29,13 +29,14 @@ sha256sums=('fd418a9c641d604c64bd0a8487b5ab431ff71f192d6021e55b194085951cb40d'
 
 build()
 {
-   cd ${srcdir}/${pkgname}-${pkgver}
-   python -m build --wheel --no-isolation
+    cd ${srcdir}/${pkgname}-${pkgver}
+    python -m build --wheel --no-isolation
 }
 
 package()
 {
-   cd ${srcdir}/${pkgname}-${pkgver}
-   python -m installer --destdir=${pkgdir} dist/*.whl
-   install -Dm644 ${srcdir}/${pkgname}-${pkgver}/${pkgname}.conf ${pkgdir}/etc/${pkgname}/${pkgname}.conf
+    cd ${srcdir}/${pkgname}-${pkgver}
+    python -m installer --destdir=${pkgdir} dist/*.whl
+    install -Dm644 ${pkgname}.conf ${pkgdir}/etc/${pkgname}/${pkgname}.conf
+    install -Dm644 man/${pkgname}.1 ${pkgdir}/usr/share/man/man1/${pkgname}.1
 }
