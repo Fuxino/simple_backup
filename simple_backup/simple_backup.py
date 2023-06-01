@@ -10,13 +10,12 @@ Classes:
     MyFormatter
     Backup
 """
-
 # Import libraries
 import sys
 import os
 import warnings
 from functools import wraps
-from shutil import rmtree
+from shutil import rmtree, which
 import shlex
 import argparse
 import configparser
@@ -155,6 +154,8 @@ class Backup:
         self._remote = None
         self._err_flag = False
         self._ssh = None
+        self._password_auth = False
+        self._password = None
 
     def check_params(self):
         """Check if parameters for the backup are valid"""
@@ -325,13 +326,22 @@ class Backup:
         except paramiko.SSHException:
             pass
 
-        pkey = None
-        password = None
-
         if self.ssh_keyfile is None:
-            logger.critical('Can\'t connect to the server. No authentication method available')
+            try:
+                password = getpass(f'{self.username}@{self.host}\'s password: ')
+                ssh.connect(self.host, username=self.username, password=password)
 
-            return None
+                self._password_auth = True
+                os.environ['SSHPASS'] = password
+
+                return ssh
+            except paramiko.SSHException as e:
+                logger.critical('Can\'t connect to the server.')
+                logger.critical(e)
+
+                return None
+
+        pkey = None
 
         try:
             pkey = RSAKey.from_private_key_file(self.ssh_keyfile)
@@ -427,11 +437,15 @@ class Backup:
 
         if euid == 0 and self.ssh_keyfile is not None:
             rsync = f'{rsync} -e \'ssh -i {self.ssh_keyfile}\''
+        elif self._password_auth and which('sshpass'):
+            rsync = f'{rsync} -e \'sshpass -e ssh -l {self.username}\''
 
         args = shlex.split(rsync)
 
         with Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) as p:
             output, _ = p.communicate()
+
+            del os.environ['SSHPASS']
 
             if p.returncode != 0:
                 self._err_flag = True
@@ -444,7 +458,7 @@ class Backup:
             logger.info('rsync: %s', output[-3])
             logger.info('rsync: %s', output[-2])
 
-        if self._remote:
+        if self._remote and not self._err_flag:
             _, stdout, _ = \
                 self._ssh.exec_command(f'if [ -L "{self.output}/simple_backup/last_backup" ]; then echo "ok"; fi')
 
@@ -458,7 +472,7 @@ class Backup:
                 if err != '':
                     logger.error(err)
                     self._err_flag = True
-        else:
+        elif not self._err_flag:
             if os.path.islink(f'{self.output}/simple_backup/last_backup'):
                 try:
                     os.remove(f'{self.output}/simple_backup/last_backup')
@@ -478,7 +492,7 @@ class Backup:
             if err != '':
                 logger.error(err)
                 self._err_flag = True
-        elif not self._remote:
+        elif not self._err_flag:
             try:
                 os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup', target_is_directory=True)
             except FileExistsError:

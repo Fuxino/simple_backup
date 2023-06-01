@@ -28,11 +28,13 @@ simple_backup \- Backup files and folders using rsync
 .RE
 .SH DESCRIPTION
 .BR simple_backup
-is a python script for performing backup of files and folders. It uses rsync to copy the files
-to the specified location. Parameters for the backup such as input files/directories, output
-location and files or folders to exclude can be specified
+is a python script for performing backup of files and folders.
+.P
+It uses rsync to copy the files to the specified location. Parameters for the backup such as
+input files/directories, output location and files or folders to exclude can be specified
 in a configuration file (default location $HOME/.config/simple_backup/simple_backup.conf)
 or directly on the command line.
+.P
 Parameters specified on the command line will override those in the configuration file.
 .SH OPTIONS
 .TP
@@ -61,7 +63,7 @@ Specify how many old backups (so excluding the current one) will be kept. The de
 is to keep them all (same as N=\-1)
 .TP
 .B \-\-host HOSTNAME
-Hostname of the server where to copy the files in case of remote backup through ssh
+Hostname of the server where to copy the files in case of remote backup through SSH
 .TP
 .B \-u, \-\-username USERNAME
 Username for connecting to the server in case of remote backup
@@ -88,10 +90,38 @@ Copy it to the default location ($HOME/.config/simple_backup) and edit it as nee
 It is possible to choose a directory on a remote server as destination for the backup. The files
 are copied by rsync through SSH. Server hostname and username must be specified, either in the
 configuration file, or on the command line (\(aq\-\-host\(aq and \(aq\-\-username\(aq options).
-Currently only authentication with SSH key has been tested. The easiest way to connect to the
-server is to use an ssh agent. Otherwise, if the SSH key is encrypted, it will be necessary
-to enter the passphrase more than once. It is possible to specify the SSH key to use with the
-option \(aq\-\-keyfile\(aq, if necessary.
+.SS AUTHENTICATION
+For authentication, it is possible to use SSH key or password.
+.P
+When using SSH key, the best way to connect to the server is to have an SSH agent running.
+Otherwise, if the SSH key is encrypted, it will be necessary to enter the passphrase more
+than once. It is possible to specify the SSH key to use with the option \(aq\-\-keyfile\(aq,
+if necessary.
+.P
+When running
+.B simple_backup
+with
+.B sudo,
+in order to connect to the user\(aq s SSH agent it is necessary to preserve the \(aq SSH_AUTH_SOCK\(aq environment variable, for example:
+.P
+.EX
+    sudo --preserve-env=SSH_AUTH_SOCK -s simple_backup [options]
+.EE
+.P
+It is also possible to make this permanent by editing the
+.B sudoers
+file (see
+.B sudoers (5)
+)
+.P
+If SSH key authentication is not available, password authentication will be used instead.
+Note that in this case
+.B sshpass
+(if available) will be used to send the password to rsync, to avoid prompting the user for
+the password multiple
+times. This can pose some security risks, see
+.B sshpass (1)
+for details. For this reason, use SSH key authentication if possible.
 .SH SEE ALSO
 .BR rsync (1)
 .SH AUTHORS
