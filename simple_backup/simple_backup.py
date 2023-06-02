@@ -522,9 +522,10 @@ class Backup:
             except NameError:
                 pass
         else:
-            _notify('Backup finished')
-
-        return 0
+            try:
+                _notify('Backup finished')
+            except NameError:
+                pass
 
 
 def _parse_arguments():
