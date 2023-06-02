@@ -20,6 +20,10 @@ The script uses rsync to actually run the backup, so you will have to install it
 sudo pacman -Syu rsync
 ```
 
+It's also required to have python-dotenv
+
+Optional dependencies are systemd-python to enable using systemd journal for logging, and dbus-python for desktop notifications.
+
 ## Install
 To install the program, first clone the repository:
 
@@ -27,23 +31,21 @@ To install the program, first clone the repository:
 git clone https://github.com/Fuxino/simple_backup.git
 ```
 
-Install tools required to build and install the package:
+Then install the tools required to build the package:
 
 ```bash
-pip install --upgrade build installer wheel
+pip install --upgrade build wheel
 ```
 
-Then run:
+Finally, run:
 
 ```bash
 cd simple_backup
 python -m build --wheel
-python -m installer dist/*.whl
+python -m pip install dist/*.whl
 ```
 
 For Arch Linux and Arch-based distros, two packages are available in the AUR (aur.archlinux.org):
 - **simple_backup** for the release version
 - **simple_backup-git** for the git version
-
-After installing, copy simple_backup.conf (if you used the PKGBUILD on Arch, it will be in /etc/simple_backup/) to $HOME/.config/simple_backup and edit is as needed.
 
