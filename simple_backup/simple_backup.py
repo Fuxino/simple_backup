@@ -217,9 +217,6 @@ class Backup:
 
             dirs = stdout.read().decode('utf-8').strip().split('\n')
 
-            if dirs.count('last_backup') > 0:
-                dirs.remove('last_backup')
-
             n_backup = len(dirs) - 1
             count = 0
 
@@ -275,29 +272,24 @@ class Backup:
                 logger.critical('SSH connection to server failed')
                 sys.exit(1)
 
-            _, stdout, _ = self._ssh.exec_command(f'readlink -v {self.output}/simple_backup/last_backup')
-            last_backup = stdout.read().decode('utf-8').strip()
+            _, stdout, _ = self._ssh.exec_command(f'find {self.output}/simple_backup/ -mindepth 1 -maxdepth 1 -type d | sort')
+            output = stdout.read().decode('utf-8').strip().split('\n')
 
-            if last_backup != '':
-                _, stdout, _ = self._ssh.exec_command(f'if [ -d "{last_backup}" ]; then echo "ok"; fi')
-
-                output = stdout.read().decode('utf-8').strip()
-
-                if output == 'ok':
-                    self._last_backup = last_backup
-                else:
-                    logger.info('No previous backups available')
+            if output[-1] != '':
+                self._last_backup = output[-1]
             else:
                 logger.info('No previous backups available')
         else:
-            if os.path.islink(f'{self.output}/simple_backup/last_backup'):
-                link = os.readlink(f'{self.output}/simple_backup/last_backup')
+            try:
+                dirs = sorted([f.path for f in os.scandir(f'{self.output}/simple_backup') if f.is_dir(follow_symlinks=False)])
+            except FileNotFoundError:
+                logger.info('No previous backups available')
 
-                if os.path.isdir(link):
-                    self._last_backup = link
-                else:
-                    logger.info('No previous backups available')
-            else:
+                return
+
+            try:
+                self._last_backup = dirs[-1]
+            except IndexError:
                 logger.info('No previous backups available')
 
     def _ssh_connection(self):
@@ -445,7 +437,10 @@ class Backup:
         with Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) as p:
             output, _ = p.communicate()
 
-            del os.environ['SSHPASS']
+            try:
+                del os.environ['SSHPASS']
+            except KeyError:
+                pass
 
             if p.returncode != 0:
                 self._err_flag = True
@@ -457,54 +452,6 @@ class Backup:
         else:
             logger.info('rsync: %s', output[-3])
             logger.info('rsync: %s', output[-2])
-
-        if self._remote and not self._err_flag:
-            _, stdout, _ = \
-                self._ssh.exec_command(f'if [ -L "{self.output}/simple_backup/last_backup" ]; then echo "ok"; fi')
-
-            output = stdout.read().decode('utf-8').strip()
-
-            if output == 'ok':
-                _, _, stderr = self._ssh.exec_command(f'rm "{self.output}/simple_backup/last_backup"')
-
-                err = stderr.read().decode('utf-8').strip()
-
-                if err != '':
-                    logger.error(err)
-                    self._err_flag = True
-        elif not self._err_flag:
-            if os.path.islink(f'{self.output}/simple_backup/last_backup'):
-                try:
-                    os.remove(f'{self.output}/simple_backup/last_backup')
-                except FileNotFoundError:
-                    logger.error('Failed to remove last_backup link. File not found')
-                    self._err_flag = True
-                except PermissionError:
-                    logger.error('Failed to remove last_backup link. Permission denied')
-                    self._err_flag = True
-
-        if self._remote and not self._err_flag:
-            _, _, stderr =\
-                self._ssh.exec_command(f'ln -s "{self._output_dir}" "{self.output}/simple_backup/last_backup"')
-
-            err = stderr.read().decode('utf-8').strip()
-
-            if err != '':
-                logger.error(err)
-                self._err_flag = True
-        elif not self._err_flag:
-            try:
-                os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup', target_is_directory=True)
-            except FileExistsError:
-                logger.error('Failed to create last_backup link. Link already exists')
-                self._err_flag = True
-            except PermissionError:
-                logger.error('Failed to create last_backup link. Permission denied')
-                self._err_flag = True
-            except FileNotFoundError:
-                logger.critical('Failed to create backup')
-
-                return 1
 
         if self.keep != -1 and not self.remove_before:
             self.remove_old_backups()
