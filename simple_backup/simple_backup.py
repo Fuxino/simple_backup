@@ -125,9 +125,6 @@ class Backup:
         except FileNotFoundError:
             return
 
-        if dirs.count('last_backup') > 0:
-            dirs.remove('last_backup')
-
         n_backup = len(dirs) - 1
         count = 0
 
@@ -150,14 +147,16 @@ class Backup:
                 logger.info(f'Removed {count} backups')
 
     def find_last_backup(self):
-        if os.path.islink(f'{self.output}/simple_backup/last_backup'):
-            link = os.readlink(f'{self.output}/simple_backup/last_backup')
+        try:
+            dirs = sorted([f.path for f in os.scandir(f'{self.output}/simple_backup') if f.is_dir(follow_symlinks=False)])
+        except FileNotFoundError:
+            logger.info('No previous backups available')
 
-            if os.path.isdir(link):
-                self._last_backup = link
-            else:
-                logger.info('No previous backups available')
-        else:
+            return
+
+        try:
+            self._last_backup = dirs[-1]
+        except IndexError:
             logger.info('No previous backups available')
 
     # Function to read configuration file
@@ -170,8 +169,8 @@ class Backup:
         except NameError:
             pass
 
-        self.create_backup_dir()
         self.find_last_backup()
+        self.create_backup_dir()
 
         _, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
         _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
@@ -214,25 +213,6 @@ class Backup:
 
         logger.info(f'rsync: {output[-3]}')
         logger.info(f'rsync: {output[-2]}')
-
-        if os.path.islink(f'{self.output}/simple_backup/last_backup'):
-            try:
-                os.remove(f'{self.output}/simple_backup/last_backup')
-            except FileNotFoundError:
-                logger.error('Failed to remove last_backup link. File not found')
-                self._err_flag = True
-            except PermissionError:
-                logger.error('Failed to remove last_backup link. Permission denied')
-                self._err_flag = True
-
-        try:
-            os.symlink(self._output_dir, f'{self.output}/simple_backup/last_backup', target_is_directory=True)
-        except FileExistsError:
-            logger.error('Failed to create last_backup link. Link already exists')
-            self._err_flag = True
-        except PermissionError:
-            logger.error('Failed to create last_backup link. Permission denied')
-            self._err_flag = True
 
         if self.keep != -1 and not self.remove_before:
             self.remove_old_backups()
