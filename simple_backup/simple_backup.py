@@ -269,7 +269,8 @@ class Backup:
         elif count > 1:
             logger.info('Removed %d backups', count)
 
-        self._ssh.close()
+        if self._ssh:
+            self._ssh.close()
 
     def find_last_backup(self):
         """Get path of last backup (from last_backup symlink) for rsync --link-dest"""
