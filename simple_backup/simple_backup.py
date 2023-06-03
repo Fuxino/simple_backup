@@ -145,7 +145,7 @@ class Backup:
         self.host = host
         self.username = username
         self.ssh_keyfile = ssh_keyfile
-        self.remove_before = remove_before
+        self._remove_before = remove_before
         self._last_backup = ''
         self._server = ''
         self._output_dir = ''
@@ -217,7 +217,11 @@ class Backup:
 
             dirs = stdout.read().decode('utf-8').strip().split('\n')
 
-            n_backup = len(dirs) - 1
+            n_backup = len(dirs)
+
+            if not self._remove_before:
+                n_backup -= 1
+
             count = 0
 
             if n_backup > self.keep:
@@ -240,10 +244,11 @@ class Backup:
             except FileNotFoundError:
                 return
 
-            if dirs.count('last_backup') > 0:
-                dirs.remove('last_backup')
+            n_backup = len(dirs)
 
-            n_backup = len(dirs) - 1
+            if not self._remove_before:
+                n_backup -= 1
+
             count = 0
 
             if n_backup > self.keep:
@@ -415,7 +420,7 @@ class Backup:
                     fp.write(e)
                     fp.write('\n')
 
-        if self.keep != -1 and self.remove_before:
+        if self.keep != -1 and self._remove_before:
             self.remove_old_backups()
 
         logger.info('Copying files. This may take a long time...')
@@ -453,7 +458,7 @@ class Backup:
             logger.info('rsync: %s', output[-3])
             logger.info('rsync: %s', output[-2])
 
-        if self.keep != -1 and not self.remove_before:
+        if self.keep != -1 and not self._remove_before:
             self.remove_old_backups()
 
         os.remove(self._inputs_path)
