@@ -420,12 +420,10 @@ class Backup:
 
         if self._last_backup == '':
             rsync = f'/usr/bin/rsync {self.options} --exclude-from={self._exclude_path} ' +\
-                    f'--files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
-                    '--ignore-missing-args --mkpath --protect-args'
+                    f'--files-from={self._inputs_path} / "{self._server}{self._output_dir}"'
         else:
             rsync = f'/usr/bin/rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
-                    f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}" ' +\
-                    '--ignore-missing-args --mkpath --protect-args'
+                    f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}"'
 
         if euid == 0 and self.ssh_keyfile is not None:
             rsync = f'{rsync} -e \'ssh -i {self.ssh_keyfile}\''
@@ -520,10 +518,13 @@ def _read_config(config_file):
     try:
         host = config.get('server', 'host')
         username = config.get('server', 'username')
-        ssh_keyfile = config.get('server', 'ssh_keyfile')
     except (configparser.NoSectionError, configparser.NoOptionError):
         host = None
         username = None
+
+    try:
+        ssh_keyfile = config.get('server', 'ssh_keyfile')
+    except (configparser.NoSectionError, configparser.NoOptionError):
         ssh_keyfile = None
 
     return inputs, output, exclude, keep, host, username, ssh_keyfile
@@ -551,7 +552,7 @@ def simple_backup():
     """Main"""
 
     args = _parse_arguments()
-    inputs, output, exclude, keep, username, host, ssh_keyfile = _read_config(args.config)
+    inputs, output, exclude, keep, host, username, ssh_keyfile = _read_config(args.config)
 
     if args.input is not None:
         inputs = args.input
@@ -574,7 +575,7 @@ def simple_backup():
     if args.keyfile is not None:
         ssh_keyfile = args.keyfile
 
-    backup_options = ['-a', '-r', '-v', '-h', '-H', '-X']
+    backup_options = ['-a', '-r', '-v', '-h', '-H', '-X', '-s', '--ignore-missing-args', '--mkpath']
 
     if args.checksum:
         backup_options.append('-c')
