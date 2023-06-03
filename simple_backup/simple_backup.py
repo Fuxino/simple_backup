@@ -174,7 +174,7 @@ class Backup:
             self._remote = True
 
         if self._remote:
-            self._ssh = self._ssh_connection()
+            self._ssh = self._ssh_connect()
 
             if self._ssh is None:
                 sys.exit(1)
@@ -264,6 +264,8 @@ class Backup:
         elif count > 1:
             logger.info('Removed %d backups', count)
 
+        self._ssh.close()
+
     def find_last_backup(self):
         """Get path of last backup (from last_backup symlink) for rsync --link-dest"""
 
@@ -292,7 +294,7 @@ class Backup:
             except IndexError:
                 logger.info('No previous backups available')
 
-    def _ssh_connection(self):
+    def _ssh_connect(self):
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
