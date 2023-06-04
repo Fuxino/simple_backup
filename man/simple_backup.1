@@ -56,6 +56,9 @@ Same as rsync option \(aq\-\-checksum\(aq, use checksums instead of mod\-time an
 .B \-\-remove\-before\-backup
 Remove old backups (if necessary) before creating the new backup. Useful to free some space before performing the backup.
 Default behavior is to remove old backups after successfully completing the backup.
+.TP
+.B \-\-no\-syslog
+Don't use systemd journal for logging
 .SH CONFIGURATION
 An example configuration file is provided at \(aq/etc/simple_backup/simple_backup.conf\(aq. Copy it to the default location
 ($HOME/.config/simple_backup) and edit it as needed.

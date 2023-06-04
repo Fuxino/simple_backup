@@ -252,6 +252,7 @@ def _parse_arguments():
                         help='Use checksum rsync option to compare files (MUCH SLOWER)')
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
+    parser.add_argument('--no-syslog', action='store_true', help='Disable systemd journal logging')
 
     args = parser.parse_args()
 
@@ -297,6 +298,13 @@ def notify(text):
 
 def simple_backup():
     args = _parse_arguments()
+
+    if args.no_syslog:
+        try:
+            logger.removeHandler(j_handler)
+        except NameError:
+            pass
+
     inputs, output, exclude, keep = _read_config(args.config)
 
     if args.input is not None:
