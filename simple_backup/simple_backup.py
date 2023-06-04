@@ -26,6 +26,7 @@ from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
 from getpass import getpass
+from glob import glob
 
 from dotenv import load_dotenv
 import paramiko
@@ -52,6 +53,7 @@ if euid == 0:
     user = os.getenv('SUDO_USER')
     homedir = os.path.expanduser(f'~{user}')
 else:
+    user = os.getenv('USER')
     homedir = os.getenv('HOME')
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -501,10 +503,25 @@ def _parse_arguments():
     parser.add_argument('-z', '--compress', action='store_true', help='Compress data during the transfer')
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
+    parser.add_argument('--no-syslog', action='store_true', help='Disable systemd journal logging')
 
     args = parser.parse_args()
 
     return args
+
+
+def _expand_inputs(inputs):
+    expanded_inputs = []
+
+    for i in inputs:
+        i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
+
+        if len(i_ex) == 0:
+            logger.warning('No file or directory matching input %s. Skipping...', i)
+        else:
+            expanded_inputs.extend(glob(os.path.expanduser(i.replace('~', f'~{user}'))))
+
+    return expanded_inputs
 
 
 def _read_config(config_file):
@@ -518,7 +535,10 @@ def _read_config(config_file):
 
     inputs = config.get('backup', 'inputs')
     inputs = inputs.split(',')
+    inputs = _expand_inputs(inputs)
+    inputs = list(set(inputs))
     output = config.get('backup', 'backup_dir')
+    output = os.path.expanduser(output.replace('~', f'~{user}'))
     exclude = config.get('backup', 'exclude')
     exclude = exclude.split(',')
     keep = config.getint('backup', 'keep')
@@ -560,6 +580,13 @@ def simple_backup():
     """Main"""
 
     args = _parse_arguments()
+
+    if args.no_syslog:
+        try:
+            logger.removeHandler(j_handler)
+        except NameError:
+            pass
+
     inputs, output, exclude, keep, host, username, ssh_keyfile = _read_config(args.config)
 
     if args.input is not None:
