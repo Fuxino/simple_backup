@@ -12,7 +12,10 @@ from timeit import default_timer
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
+from glob import glob
+
 from dotenv import load_dotenv
+
 
 try:
     from systemd import journal
@@ -32,6 +35,7 @@ if euid == 0:
     user = os.getenv('SUDO_USER')
     homedir = os.path.expanduser(f'~{user}')
 else:
+    user = os.getenv('USER')
     homedir = os.getenv('HOME')
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -259,6 +263,20 @@ def _parse_arguments():
     return args
 
 
+def _expand_inputs(inputs):
+    expanded_inputs = []
+
+    for i in inputs:
+        i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
+
+        if len(i_ex) == 0:
+            logger.warning(f'No file or directory matching input {i}. Skipping...')
+        else:
+            expanded_inputs.extend(glob(os.path.expanduser(i.replace('~', f'~{user}'))))
+
+    return expanded_inputs
+
+
 def _read_config(config_file):
     if not os.path.isfile(config_file):
         logger.warning(f'Config file {config_file} does not exist')
@@ -270,7 +288,10 @@ def _read_config(config_file):
 
     inputs = config.get('default', 'inputs')
     inputs = inputs.split(',')
+    inputs = _expand_inputs(inputs)
+    inputs = list(set(inputs))
     output = config.get('default', 'backup_dir')
+    output = os.path.expanduser(output.replace('~', f'~{user}'))
     exclude = config.get('default', 'exclude')
     exclude = exclude.split(',')
     keep = config.getint('default', 'keep')
