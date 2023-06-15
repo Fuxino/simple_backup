@@ -533,15 +533,23 @@ def _read_config(config_file):
     config = configparser.ConfigParser()
     config.read(config_file)
 
-    inputs = config.get('backup', 'inputs')
+    section = 'backup'
+
+    # Allow compatibility with previous version of config file
+    try:
+        inputs = config.get(section, 'inputs')
+    except configparser.NoSectionError:
+        section = 'default'
+        inputs = config.get(section, 'inputs')
+
     inputs = inputs.split(',')
     inputs = _expand_inputs(inputs)
     inputs = list(set(inputs))
-    output = config.get('backup', 'backup_dir')
+    output = config.get(section, 'backup_dir')
     output = os.path.expanduser(output.replace('~', f'~{user}'))
-    exclude = config.get('backup', 'exclude')
+    exclude = config.get(section, 'exclude')
     exclude = exclude.split(',')
-    keep = config.getint('backup', 'keep')
+    keep = config.getint(section, 'keep')
 
     try:
         host = config.get('server', 'host')
@@ -587,7 +595,11 @@ def simple_backup():
         except NameError:
             pass
 
-    inputs, output, exclude, keep, host, username, ssh_keyfile = _read_config(args.config)
+    try:
+        inputs, output, exclude, keep, host, username, ssh_keyfile = _read_config(args.config)
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        logger.critical('Bad configuration file')
+        sys.exit(1)
 
     if args.input is not None:
         inputs = args.input
