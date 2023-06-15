@@ -62,6 +62,16 @@ Don't use systemd journal for logging
 .SH CONFIGURATION
 An example configuration file is provided at \(aq/etc/simple_backup/simple_backup.conf\(aq. Copy it to the default location
 ($HOME/.config/simple_backup) and edit it as needed.
+.SH EXIT STATUS
+.TP
+.B 0
+The backup was completed without errors
+.TP
+.B 1
+No valid inputs selected for backup
+.TP
+.B 2
+Backup failed because output directory for storing the backup does not exist
 .SH SEE ALSO
 .BR rsync (1)
 .SH AUTHORS

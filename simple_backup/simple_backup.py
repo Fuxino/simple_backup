@@ -16,7 +16,6 @@ from glob import glob
 
 from dotenv import load_dotenv
 
-
 try:
     from systemd import journal
 except ImportError:
@@ -97,24 +96,24 @@ class Backup:
         if self.inputs is None or len(self.inputs) == 0:
             logger.info('No existing files or directories specified for backup. Nothing to do')
 
-            return False
+            return 1
 
         if self.output is None:
             logger.critical('No output path specified. Use -o argument or specify output path in configuration file')
 
-            return False
+            return 2
 
         if not os.path.isdir(self.output):
             logger.critical('Output path for backup does not exist')
 
-            return False
+            return 2
 
         self.output = os.path.abspath(self.output)
 
         if self.keep is None:
             self.keep = -1
 
-        return True
+        return 0
 
     # Function to create the actual backup directory
     def create_backup_dir(self):
@@ -347,12 +346,14 @@ def simple_backup():
 
     backup = Backup(inputs, output, exclude, keep, backup_options, remove_before=args.remove_before_backup)
 
-    if backup.check_params():
+    return_code = backup.check_params()
+
+    if return_code == 0:
         backup.run()
 
         return 0
 
-    return 1
+    return return_code
 
 
 if __name__ == '__main__':
