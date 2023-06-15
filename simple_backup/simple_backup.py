@@ -34,7 +34,6 @@ from paramiko import RSAKey, Ed25519Key, ECDSAKey, DSSKey
 
 warnings.filterwarnings('error')
 
-
 try:
     from systemd import journal
 except ImportError:
@@ -163,14 +162,14 @@ class Backup:
         """Check if parameters for the backup are valid"""
 
         if self.inputs is None or len(self.inputs) == 0:
-            logger.info('No files or directory specified for backup.')
+            logger.info('No existing files or directories specified for backup. Nothing to do')
 
-            return False
+            return 1
 
         if self.output is None:
             logger.critical('No output path specified. Use -o argument or specify output path in configuration file')
 
-            return False
+            return 2
 
         if self.host is not None and self.username is not None:
             self._remote = True
@@ -188,19 +187,19 @@ class Backup:
             if output != 'ok':
                 logger.critical('Output path for backup does not exist')
 
-                return False
+                return 2
         else:
             if not os.path.isdir(self.output):
                 logger.critical('Output path for backup does not exist')
 
-                return False
+                return 2
 
         self.output = os.path.abspath(self.output)
 
         if self.keep is None:
             self.keep = -1
 
-        return True
+        return 0
 
     # Function to create the actual backup directory
     def define_backup_dir(self):
@@ -293,6 +292,15 @@ class Backup:
                 logger.info('No previous backups available')
 
                 return
+            except PermissionError:
+                logger.critical('Cannot access the backup directory. Permission denied')
+
+                try:
+                    notify('Backup failed (check log for details)')
+                except NameError:
+                    pass
+
+                sys.exit(3)
 
             try:
                 self._last_backup = dirs[-1]
@@ -414,7 +422,7 @@ class Backup:
         self.find_last_backup()
 
         _, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
-        _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
+        count = 0
 
         with open(self._inputs_path, 'w', encoding='utf-8') as fp:
             for i in self.inputs:
@@ -423,6 +431,19 @@ class Backup:
                 else:
                     fp.write(i)
                     fp.write('\n')
+                    count += 1
+
+        if count == 0:
+            logger.info('No existing files or directories specified for backup. Nothing to do')
+
+            try:
+                notify('Backup finished. No files copied')
+            except NameError:
+                pass
+
+            return 1
+
+        _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
 
         with open(self._exclude_path, 'w', encoding='utf-8') as fp:
             if self.exclude is not None:
@@ -506,6 +527,8 @@ class Backup:
                     _notify('Some errors occurred while performing the backup. Check log for details')
                 except NameError:
                     pass
+
+                return 4
             else:
                 logger.info('Backup completed')
 
@@ -513,6 +536,8 @@ class Backup:
                     _notify('Backup completed')
                 except NameError:
                     pass
+
+            return 0
 
 
 def _parse_arguments():
@@ -536,6 +561,9 @@ def _parse_arguments():
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
     parser.add_argument('--no-syslog', action='store_true', help='Disable systemd journal logging')
+    parser.add_argument('--rsync-options', nargs='+',
+                        choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 'D', 'H', 'X'],
+                        help='Specify options for rsync')
 
     args = parser.parse_args()
 
@@ -546,12 +574,15 @@ def _expand_inputs(inputs):
     expanded_inputs = []
 
     for i in inputs:
+        if i == '':
+            continue
+
         i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
 
         if len(i_ex) == 0:
             logger.warning('No file or directory matching input %s. Skipping...', i)
         else:
-            expanded_inputs.extend(glob(os.path.expanduser(i.replace('~', f'~{user}'))))
+            expanded_inputs.extend(i_ex)
 
     return expanded_inputs
 
@@ -654,23 +685,31 @@ def simple_backup():
     if args.keyfile is not None:
         ssh_keyfile = args.keyfile
 
-    backup_options = ['-a', '-r', '-v', '-h', '-H', '-X', '-s', '--ignore-missing-args', '--mkpath']
+    if args.rsync_options is None:
+        rsync_options = ['-a', '-r', '-v', '-h', '-H', '-X', '-s', '--ignore-missing-args', '--mkpath']
+    else:
+        rsync_options = ['-r', '-v']
+
+        for ro in args.rsync_options:
+            rsync_options.append(f'-{ro}')
 
     if args.checksum:
-        backup_options.append('-c')
+        rsync_options.append('-c')
 
     if args.compress:
-        backup_options.append('-z')
+        rsync_options.append('-z')
 
-    backup_options = ' '.join(backup_options)
+    rsync_options = ' '.join(rsync_options)
 
-    backup = Backup(inputs, output, exclude, keep, backup_options, host, username,
+    backup = Backup(inputs, output, exclude, keep, rsync_options, host, username,
                     ssh_keyfile, remove_before=args.remove_before_backup)
 
-    if backup.check_params():
+    return_code = backup.check_params()
+
+    if return_code == 0:
         return backup.run()
 
-    return 1
+    return return_code
 
 
 if __name__ == '__main__':

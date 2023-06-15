@@ -1,4 +1,4 @@
-.TH SIMPLE_BACKUP 1 2023-06-01 SIMPLE_BACKUP 3.2.6
+.TH SIMPLE_BACKUP 1 2023-06-15 SIMPLE_BACKUP 3.2.6
 .SH NAME
 simple_backup \- Backup files and folders using rsync
 .SH SYNOPSIS
@@ -86,8 +86,27 @@ Default behavior is to remove old backups after successfully completing the back
 .TP
 .B \-\-no\-syslog
 Don't use systemd journal for logging
+.TP
+.B \-\-rsync\-options OPTIONS [OPTION...]
+By default, the following rsync options are used:
+.RS
+.PP
+\-a \-r \-c \-v \-h \-H \-X
+.PP
+Using \-\-rsync\-options it is possible to manually select which options to use. Supported values are the following:
+.PP
+\-a, \-l, \-p, \-t, \-g, \-o, \-c, \-h, \-D, \-H, \-X
+.PP
+Options \-r and \-v are used in any case. Not that options must be specified without dash (\-), for example:
+.PP
+.EX
+    simple_backup \-\-rsync\-options a l p
+.EE
+.TP
+Check rsync(1) for details about the options.
+.RE
 .SH CONFIGURATION
-An example configuration file is provided at \(aq/etc/simple_backup/simple_backup.conf\(aq.
+An example configuration file is provided at \(aq/usr/share/doc/simple_backup/simple_backup.conf\(aq.
 Copy it to the default location ($HOME/.config/simple_backup) and edit it as needed.
 .SH REMOTE BACKUP
 It is possible to choose a directory on a remote server as destination for the backup. The files
@@ -125,6 +144,22 @@ the password multiple
 times. This can pose some security risks, see
 .B sshpass (1)
 for details. For this reason, use SSH key authentication if possible.
+.SH EXIT STATUS
+.TP
+.B 0
+The backup was completed without errors
+.TP
+.B 1
+No valid inputs selected for backup
+.TP
+.B 2
+Backup failed because output directory for storing the backup does not exist
+.TP
+.B 3
+Permission denied to access the output directory
+.TP
+.B 4
+rsync error (rsync returned a non-zero value)
 .SH SEE ALSO
 .BR rsync (1)
 .SH AUTHORS
