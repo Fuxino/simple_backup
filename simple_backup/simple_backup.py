@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 # Import libraries
+import sys
 import os
 from functools import wraps
 from shutil import rmtree
@@ -156,6 +157,15 @@ class Backup:
             logger.info('No previous backups available')
 
             return
+        except PermissionError:
+            logger.critical('Cannot access the backup directory. Permission denied')
+
+            try:
+                notify('Backup failed (check log for details)')
+            except NameError:
+                pass
+
+            sys.exit(3)
 
         try:
             self._last_backup = dirs[-1]
@@ -229,11 +239,15 @@ class Backup:
                 notify('Backup finished with errors (check log for details)')
             except NameError:
                 pass
+
+            return 4
         else:
             try:
                 notify('Backup finished')
             except NameError:
                 pass
+
+            return 0
 
 
 def _parse_arguments():
@@ -349,9 +363,7 @@ def simple_backup():
     return_code = backup.check_params()
 
     if return_code == 0:
-        backup.run()
-
-        return 0
+        return backup.run()
 
     return return_code
 
