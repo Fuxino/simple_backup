@@ -186,12 +186,28 @@ class Backup:
         self.create_backup_dir()
 
         _, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
-        _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
+        count = 0
 
         with open(self._inputs_path, 'w') as fp:
             for i in self.inputs:
-                fp.write(i)
-                fp.write('\n')
+                if not os.path.exists(i):
+                    logger.warning(f'Input {i} not found. Skipping')
+                else:
+                    fp.write(i)
+                    fp.write('\n')
+                    count += 1
+
+        if count == 0:
+            logger.info('No existing files or directories specified for backup. Nothing to do')
+
+            try:
+                notify('Backup finished. No files copied')
+            except NameError:
+                pass
+
+            return 1
+
+        _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
 
         with open(self._exclude_path, 'w') as fp:
             if self.exclude is not None:
