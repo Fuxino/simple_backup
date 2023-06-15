@@ -95,7 +95,7 @@ class Backup:
 
     def check_params(self):
         if self.inputs is None or len(self.inputs) == 0:
-            logger.info('No files or directory specified for backup.')
+            logger.info('No existing files or directories specified for backup. Nothing to do')
 
             return False
 
@@ -181,11 +181,8 @@ class Backup:
 
         with open(self._inputs_path, 'w') as fp:
             for i in self.inputs:
-                if not os.path.exists(i):
-                    logger.warning(f'Input {i} not found. Skipping')
-                else:
-                    fp.write(i)
-                    fp.write('\n')
+                fp.write(i)
+                fp.write('\n')
 
         with open(self._exclude_path, 'w') as fp:
             if self.exclude is not None:
@@ -267,12 +264,15 @@ def _expand_inputs(inputs):
     expanded_inputs = []
 
     for i in inputs:
+        if i == '':
+            continue
+
         i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
 
         if len(i_ex) == 0:
             logger.warning(f'No file or directory matching input {i}. Skipping...')
         else:
-            expanded_inputs.extend(glob(os.path.expanduser(i.replace('~', f'~{user}'))))
+            expanded_inputs.extend(i_ex)
 
     return expanded_inputs
 
