@@ -109,7 +109,7 @@ for details about the options.
 .RE
 .TP
 .B \-\-remote\-sudo
-Run rsync on the remote server with sudo. For this to work the user used to login to the server obviously need to be allowed to use sudo. In addition, the user need to be able to run rsync with sudo without a password. To do this, /etc/sudoers on the server need to be edited adding a line like this one:
+Run rsync on the remote server with sudo. This is needed if you want to preserve the owner of the files/folders to be copied (rsync \-\-owner option). For this to work the user used to login to the server obviously need to be allowed to use sudo. In addition, the user need to be able to run rsync with sudo without a password. To do this, /etc/sudoers on the server need to be edited adding a line like this one:
 .RS
 .PP
     <username> ALL=NOPASSWD:<path/to/rsync>
