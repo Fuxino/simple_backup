@@ -91,11 +91,11 @@ Don't use systemd journal for logging
 By default, the following rsync options are used:
 .RS
 .PP
-\-a \-r \-c \-v \-h \-H \-X
+    \-a \-r \-v \-h \-s \-H \-X
 .PP
 Using \-\-rsync\-options it is possible to manually select which options to use. Supported values are the following:
 .PP
-\-a, \-l, \-p, \-t, \-g, \-o, \-c, \-h, \-D, \-H, \-X
+    \-a, \-l, \-p, \-t, \-g, \-o, \-c, \-h, \-D, \-H, \-X, \-s
 .PP
 Options \-r and \-v are used in any case. Not that options must be specified without dash (\-), for example:
 .PP
@@ -103,7 +103,16 @@ Options \-r and \-v are used in any case. Not that options must be specified wit
     simple_backup \-\-rsync\-options a l p
 .EE
 .TP
-Check rsync(1) for details about the options.
+Check
+.B rsync (1)
+for details about the options.
+.RE
+.TP
+.B \-\-remote\-sudo
+Run rsync on the remote server with sudo. For this to work the user used to login to the server obviously need to be allowed to use sudo. In addition, the user need to be able to run rsync with sudo without a password. To do this, /etc/sudoers on the server need to be edited adding a line like this one:
+.RS
+.PP
+    <username> ALL=NOPASSWD:<path/to/rsync>
 .RE
 .SH CONFIGURATION
 An example configuration file is provided at \(aq/usr/share/doc/simple_backup/simple_backup.conf\(aq.

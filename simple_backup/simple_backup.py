@@ -137,7 +137,7 @@ class Backup:
     """
 
     def __init__(self, inputs, output, exclude, keep, options, host=None,
-                 username=None, ssh_keyfile=None, remove_before=False):
+                 username=None, ssh_keyfile=None, remote_sudo=False, remove_before=False):
         self.inputs = inputs
         self.output = output
         self.exclude = exclude
@@ -146,6 +146,7 @@ class Backup:
         self.host = host
         self.username = username
         self.ssh_keyfile = ssh_keyfile
+        self.remote_sudo = remote_sudo
         self._remove_before = remove_before
         self._last_backup = ''
         self._server = ''
@@ -470,6 +471,9 @@ class Backup:
         else:
             rsync = f'{rsync} -e \'ssh -o StrictHostKeyChecking=no\''
 
+        if self._remote and self.remote_sudo:
+            rsync = f'{rsync} --rsync-path="sudo rsync"'
+
         args = shlex.split(rsync)
 
         with Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) as p:
@@ -562,8 +566,9 @@ def _parse_arguments():
                         help='Remove old backups before executing the backup, instead of after')
     parser.add_argument('--no-syslog', action='store_true', help='Disable systemd journal logging')
     parser.add_argument('--rsync-options', nargs='+',
-                        choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 'D', 'H', 'X'],
+                        choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 's', 'D', 'H', 'X'],
                         help='Specify options for rsync')
+    parser.add_argument('--remote-sudo', action='store_true', help='Run rsync on remote server with sudo if allowed')
 
     args = parser.parse_args()
 
@@ -591,7 +596,7 @@ def _read_config(config_file):
     if not os.path.isfile(config_file):
         logger.warning('Config file %s does not exist', config_file)
 
-        return None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None
 
     config = configparser.ConfigParser()
     config.read(config_file)
@@ -610,9 +615,17 @@ def _read_config(config_file):
     inputs = list(set(inputs))
     output = config.get(section, 'backup_dir')
     output = os.path.expanduser(output.replace('~', f'~{user}'))
-    exclude = config.get(section, 'exclude')
-    exclude = exclude.split(',')
-    keep = config.getint(section, 'keep')
+
+    try:
+        exclude = config.get(section, 'exclude')
+        exclude = exclude.split(',')
+    except configparser.NoOptionError:
+        exclude = []
+
+    try:
+        keep = config.getint(section, 'keep')
+    except configparser.NoOptionError:
+        keep = -1
 
     try:
         host = config.get('server', 'host')
@@ -626,7 +639,12 @@ def _read_config(config_file):
     except (configparser.NoSectionError, configparser.NoOptionError):
         ssh_keyfile = None
 
-    return inputs, output, exclude, keep, host, username, ssh_keyfile
+    try:
+        remote_sudo = config.getboolean('server', 'remote_sudo')
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        remote_sudo = False
+
+    return inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo
 
 
 def _notify(text):
@@ -659,7 +677,7 @@ def simple_backup():
             pass
 
     try:
-        inputs, output, exclude, keep, host, username, ssh_keyfile = _read_config(args.config)
+        inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo = _read_config(args.config)
     except (configparser.NoSectionError, configparser.NoOptionError):
         logger.critical('Bad configuration file')
         sys.exit(1)
@@ -699,10 +717,13 @@ def simple_backup():
     if args.compress:
         rsync_options.append('-z')
 
+    if args.remote_sudo is not None:
+        remote_sudo = args.remote_sudo
+
     rsync_options = ' '.join(rsync_options)
 
     backup = Backup(inputs, output, exclude, keep, rsync_options, host, username,
-                    ssh_keyfile, remove_before=args.remove_before_backup)
+                    ssh_keyfile, remote_sudo, remove_before=args.remove_before_backup)
 
     return_code = backup.check_params()
 
