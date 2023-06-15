@@ -283,6 +283,9 @@ def _parse_arguments():
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
     parser.add_argument('--no-syslog', action='store_true', help='Disable systemd journal logging')
+    parser.add_argument('--rsync-options', nargs='+',
+                        choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 'D', 'H', 'X'],
+                        help='Specify options for rsync')
 
     args = parser.parse_args()
 
@@ -369,12 +372,21 @@ def simple_backup():
     if args.keep is not None:
         keep = args.keep
 
-    if args.checksum:
-        backup_options = '-arcvh -H -X'
+    if args.rsync_options is None:
+        if args.checksum:
+            rsync_options = '-arcvh -H -X'
+        else:
+            rsync_options = '-arvh -H -X'
     else:
-        backup_options = '-arvh -H -X'
+        rsync_options = '-r -v '
 
-    backup = Backup(inputs, output, exclude, keep, backup_options, remove_before=args.remove_before_backup)
+        for ro in args.rsync_options:
+            rsync_options = rsync_options + f'-{ro} '
+
+        if '-c ' not in rsync_options and args.checksum:
+            rsync_options = rsync_options + '-c'
+
+    backup = Backup(inputs, output, exclude, keep, rsync_options, remove_before=args.remove_before_backup)
 
     return_code = backup.check_params()
 
