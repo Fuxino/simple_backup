@@ -114,6 +114,9 @@ Run rsync on the remote server with sudo. This is needed if you want to preserve
 .PP
     <username> ALL=NOPASSWD:<path/to/rsync>
 .RE
+.TP
+.B \-\-numeric\-ids
+Use rsync \-\-numeric\-ids option. This causes rsync to use numeric uid/gid instead of trying to map uid/gid names from the local machine to the server
 .SH CONFIGURATION
 An example configuration file is provided at \(aq/usr/share/doc/simple_backup/simple_backup.conf\(aq.
 Copy it to the default location ($HOME/.config/simple_backup) and edit it as needed.

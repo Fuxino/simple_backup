@@ -569,6 +569,7 @@ def _parse_arguments():
                         choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 's', 'D', 'H', 'X'],
                         help='Specify options for rsync')
     parser.add_argument('--remote-sudo', action='store_true', help='Run rsync on remote server with sudo if allowed')
+    parser.add_argument('--numeric-ids', action='store_true', help='Use rsync \'--numeric-ids\' option (don\'t map uid/gid values by name')
 
     args = parser.parse_args()
 
@@ -596,7 +597,7 @@ def _read_config(config_file):
     if not os.path.isfile(config_file):
         logger.warning('Config file %s does not exist', config_file)
 
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
 
     config = configparser.ConfigParser()
     config.read(config_file)
@@ -644,7 +645,12 @@ def _read_config(config_file):
     except (configparser.NoSectionError, configparser.NoOptionError):
         remote_sudo = False
 
-    return inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo
+    try:
+        numeric_ids = config.getboolean('server', 'numeric_ids')
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        numeric_ids = False
+
+    return inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo, numeric_ids
 
 
 def _notify(text):
@@ -677,7 +683,7 @@ def simple_backup():
             pass
 
     try:
-        inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo = _read_config(args.config)
+        inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo, numeric_ids = _read_config(args.config)
     except (configparser.NoSectionError, configparser.NoOptionError):
         logger.critical('Bad configuration file')
         sys.exit(1)
@@ -716,6 +722,9 @@ def simple_backup():
 
     if args.compress:
         rsync_options.append('-z')
+
+    if numeric_ids or args.numeric_ids:
+        rsync_options.append('--numeric-ids')
 
     if args.remote_sudo is not None:
         remote_sudo = args.remote_sudo
