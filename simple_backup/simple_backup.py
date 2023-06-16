@@ -120,6 +120,8 @@ class Backup:
             Username for server login (for remote backup)
         ssh_keyfile: str
             Location of ssh key
+        remote_sudo: bool
+            Run remote rsync with sudo
         remove_before: bool
             Indicate if removing old backups will be performed before copying files
 
@@ -136,8 +138,8 @@ class Backup:
             Perform the backup
     """
 
-    def __init__(self, inputs, output, exclude, keep, options, host=None,
-                 username=None, ssh_keyfile=None, remote_sudo=False, remove_before=False):
+    def __init__(self, inputs, output, exclude, keep, options, host=None, username=None,
+                 ssh_keyfile=None, remote_sudo=False, remove_before=False):
         self.inputs = inputs
         self.output = output
         self.exclude = exclude
@@ -552,7 +554,7 @@ def _parse_arguments():
 
     parser.add_argument('-c', '--config', default=f'{homedir}/.config/simple_backup/simple_backup.conf',
                         help='Specify location of configuration file')
-    parser.add_argument('-i', '--input', nargs='+', help='Paths/files to backup')
+    parser.add_argument('-i', '--inputs', nargs='+', help='Paths/files to backup')
     parser.add_argument('-o', '--output', help='Output directory for the backup')
     parser.add_argument('-e', '--exclude', nargs='+', help='Files/directories/patterns to exclude from the backup')
     parser.add_argument('-k', '--keep', type=int, help='Number of old backups to keep')
@@ -569,7 +571,8 @@ def _parse_arguments():
                         choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 's', 'D', 'H', 'X'],
                         help='Specify options for rsync')
     parser.add_argument('--remote-sudo', action='store_true', help='Run rsync on remote server with sudo if allowed')
-    parser.add_argument('--numeric-ids', action='store_true', help='Use rsync \'--numeric-ids\' option (don\'t map uid/gid values by name')
+    parser.add_argument('--numeric-ids', action='store_true',
+                        help='Use rsync \'--numeric-ids\' option (don\'t map uid/gid values by name')
 
     args = parser.parse_args()
 
@@ -594,10 +597,12 @@ def _expand_inputs(inputs):
 
 
 def _read_config(config_file):
+    config_args = {}
+
     if not os.path.isfile(config_file):
         logger.warning('Config file %s does not exist', config_file)
 
-        return None, None, None, None, None, None, None, None, None
+        return config_args
 
     config = configparser.ConfigParser()
     config.read(config_file)
@@ -614,8 +619,13 @@ def _read_config(config_file):
     inputs = inputs.split(',')
     inputs = _expand_inputs(inputs)
     inputs = list(set(inputs))
+
+    config_args['inputs'] = inputs
+
     output = config.get(section, 'backup_dir')
     output = os.path.expanduser(output.replace('~', f'~{user}'))
+
+    config_args['output'] = output
 
     try:
         exclude = config.get(section, 'exclude')
@@ -623,10 +633,14 @@ def _read_config(config_file):
     except configparser.NoOptionError:
         exclude = []
 
+    config_args['exclude'] = exclude
+
     try:
         keep = config.getint(section, 'keep')
     except configparser.NoOptionError:
         keep = -1
+
+    config_args['keep'] = keep
 
     try:
         host = config.get('server', 'host')
@@ -635,22 +649,31 @@ def _read_config(config_file):
         host = None
         username = None
 
+    config_args['host'] = host
+    config_args['username'] = username
+
     try:
         ssh_keyfile = config.get('server', 'ssh_keyfile')
     except (configparser.NoSectionError, configparser.NoOptionError):
         ssh_keyfile = None
+
+    config_args['ssh_keyfile'] = ssh_keyfile
 
     try:
         remote_sudo = config.getboolean('server', 'remote_sudo')
     except (configparser.NoSectionError, configparser.NoOptionError):
         remote_sudo = False
 
+    config_args['remote_sudo'] = remote_sudo
+
     try:
         numeric_ids = config.getboolean('server', 'numeric_ids')
     except (configparser.NoSectionError, configparser.NoOptionError):
         numeric_ids = False
 
-    return inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo, numeric_ids
+    config_args['numeric_ids'] = numeric_ids
+
+    return config_args
 
 
 def _notify(text):
@@ -683,31 +706,19 @@ def simple_backup():
             pass
 
     try:
-        inputs, output, exclude, keep, host, username, ssh_keyfile, remote_sudo, numeric_ids = _read_config(args.config)
+        config_args = _read_config(args.config)
     except (configparser.NoSectionError, configparser.NoOptionError):
         logger.critical('Bad configuration file')
         sys.exit(1)
 
-    if args.input is not None:
-        inputs = args.input
-
-    if args.output is not None:
-        output = args.output
-
-    if args.exclude is not None:
-        exclude = args.exclude
-
-    if args.keep is not None:
-        keep = args.keep
-
-    if args.host is not None:
-        host = args.host
-
-    if args.username is not None:
-        username = args.username
-
-    if args.keyfile is not None:
-        ssh_keyfile = args.keyfile
+    inputs = args.inputs if args.inputs is not None else config_args['inputs']
+    output = args.output if args.output is not None else config_args['output']
+    exclude = args.exclude if args.exclude is not None else config_args['exclude']
+    keep = args.keep if args.keep is not None else config_args['keep']
+    host = args.host if args.host is not None else config_args['host']
+    username = args.username if args.username is not None else config_args['username']
+    ssh_keyfile = args.keyfile if args.keyfile is not None else config_args['ssh_keyfile']
+    remote_sudo = args.remote_sudo if args.remote_sudo is not None else config_args['remote_sudo']
 
     if args.rsync_options is None:
         rsync_options = ['-a', '-r', '-v', '-h', '-H', '-X', '-s', '--ignore-missing-args', '--mkpath']
@@ -723,16 +734,13 @@ def simple_backup():
     if args.compress:
         rsync_options.append('-z')
 
-    if numeric_ids or args.numeric_ids:
+    if args.numeric_ids or config_args['numeric_ids']:
         rsync_options.append('--numeric-ids')
-
-    if args.remote_sudo is not None:
-        remote_sudo = args.remote_sudo
 
     rsync_options = ' '.join(rsync_options)
 
-    backup = Backup(inputs, output, exclude, keep, rsync_options, host, username,
-                    ssh_keyfile, remote_sudo, remove_before=args.remove_before_backup)
+    backup = Backup(inputs, output, exclude, keep, rsync_options, host, username, ssh_keyfile,
+                    remote_sudo, remove_before=args.remove_before_backup)
 
     return_code = backup.check_params()
 
