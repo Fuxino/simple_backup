@@ -49,3 +49,23 @@ For Arch Linux and Arch-based distros, two packages are available in the AUR (au
 - **simple_backup** for the release version
 - **simple_backup-git** for the git version
 
+## Remote backup
+> **Warning**
+> This feature is experimental
+
+It's possible to use a remote server as destination for the backup. Just use the --username (or -u) and --host arguments (or set them in the configuration file).
+For this to work, rsync must be installed on the server too.
+
+### Server authentication
+The best way to handle the authentication is to have an ssh agent running on your system, otherwise if a passphrase is necessary to unlock the ssh key, it will be necessary to enter it more than once.
+If needed, it's possible to specify the ssh key location with the --keyfile argument or in the configuration file.
+
+To be able to connect to the user's ssh agent when running simple_backup with sudo, make sure to preserve the SSH_AUTH_SOCK environment variable. For example:
+
+```bash
+sudo --preserve-env=SSH_AUTH_SOCK -s simple_backup [options]
+```
+
+or by editing the sudoers file.
+If SSH key authentication is not available, password authentication will be used instead.
+

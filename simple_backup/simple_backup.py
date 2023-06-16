@@ -1,10 +1,22 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
+"""
+A simple python script that calls rsync to perform a backup
+
+Parameters can be specified on the command line or using a configuration file
+Backup to a remote server is also supported (experimental)
+
+Classes:
+    MyFormatter
+    Backup
+"""
 # Import libraries
 import sys
 import os
+import warnings
 from functools import wraps
-from shutil import rmtree
+from shutil import rmtree, which
+import shlex
 import argparse
 import configparser
 import logging
@@ -13,9 +25,14 @@ from timeit import default_timer
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
+from getpass import getpass
 from glob import glob
 
 from dotenv import load_dotenv
+import paramiko
+from paramiko import RSAKey, Ed25519Key, ECDSAKey, DSSKey
+
+warnings.filterwarnings('error')
 
 try:
     from systemd import journal
@@ -56,6 +73,11 @@ if journal:
 
 
 def timing(_logger):
+    """Decorator to measure execution time of a function
+
+        Parameters:
+            _logger: Logger object
+    """
     def decorator_timing(func):
         @wraps(func)
         def wrapper_timing(*args, **kwargs):
@@ -75,25 +97,73 @@ def timing(_logger):
 
 
 class MyFormatter(argparse.RawTextHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
-    pass
+    """Custom format for argparse help text"""
 
 
 class Backup:
+    """Main class defining parameters and functions for performing backup
 
-    def __init__(self, inputs, output, exclude, keep, options, remove_before=False):
+    Attributes:
+        inputs: list
+            Files and folders that will be backup up
+        output: str
+            Path where the backup will be saved
+        exclude: list
+            List of files/folders/patterns to exclude from backup
+        options: str
+            String representing main backup options for rsync
+        keep: int
+            Number of old backup to preserve
+        host: str
+            Hostname of server (for remote backup)
+        username: str
+            Username for server login (for remote backup)
+        ssh_keyfile: str
+            Location of ssh key
+        remote_sudo: bool
+            Run remote rsync with sudo
+        remove_before: bool
+            Indicate if removing old backups will be performed before copying files
+
+    Methods:
+        check_params():
+            Check if parameters for the backup are valid
+        define_backup_dir():
+            Define the actual backup dir
+        remove_old_backups():
+            Remove old backups if there are more than indicated by 'keep'
+        find_last_backup():
+            Get path of last backup (from last_backup symlink) for rsync --link-dest
+        run():
+            Perform the backup
+    """
+
+    def __init__(self, inputs, output, exclude, keep, options, host=None, username=None,
+                 ssh_keyfile=None, remote_sudo=False, remove_before=False):
         self.inputs = inputs
         self.output = output
         self.exclude = exclude
         self.options = options
         self.keep = keep
-        self.remove_before = remove_before
+        self.host = host
+        self.username = username
+        self.ssh_keyfile = ssh_keyfile
+        self.remote_sudo = remote_sudo
+        self._remove_before = remove_before
         self._last_backup = ''
+        self._server = ''
         self._output_dir = ''
         self._inputs_path = ''
         self._exclude_path = ''
+        self._remote = None
         self._err_flag = False
+        self._ssh = None
+        self._password_auth = False
+        self._password = None
 
     def check_params(self):
+        """Check if parameters for the backup are valid"""
+
         if self.inputs is None or len(self.inputs) == 0:
             logger.info('No existing files or directories specified for backup. Nothing to do')
 
@@ -104,10 +174,28 @@ class Backup:
 
             return 2
 
-        if not os.path.isdir(self.output):
-            logger.critical('Output path for backup does not exist')
+        if self.host is not None and self.username is not None:
+            self._remote = True
 
-            return 2
+        if self._remote:
+            self._ssh = self._ssh_connect()
+
+            if self._ssh is None:
+                sys.exit(1)
+
+            _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self.output}" ]; then echo "ok"; fi')
+
+            output = stdout.read().decode('utf-8').strip()
+
+            if output != 'ok':
+                logger.critical('Output path for backup does not exist')
+
+                return 2
+        else:
+            if not os.path.isdir(self.output):
+                logger.critical('Output path for backup does not exist')
+
+                return 2
 
         self.output = os.path.abspath(self.output)
 
@@ -117,81 +205,232 @@ class Backup:
         return 0
 
     # Function to create the actual backup directory
-    def create_backup_dir(self):
+    def define_backup_dir(self):
+        """Define the actual backup dir"""
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self._output_dir = f'{self.output}/simple_backup/{now}'
 
-        os.makedirs(self._output_dir, exist_ok=True)
+        if self._remote:
+            self._server = f'{self.username}@{self.host}:'
 
     def remove_old_backups(self):
-        try:
-            dirs = os.listdir(f'{self.output}/simple_backup')
-        except FileNotFoundError:
-            return
+        """Remove old backups if there are more than indicated by 'keep'"""
 
-        n_backup = len(dirs) - 1
-        count = 0
+        if self._remote:
+            _, stdout, _ = self._ssh.exec_command(f'ls {self.output}/simple_backup')
 
-        if n_backup > self.keep:
-            logger.info('Removing old backups...')
-            dirs.sort()
+            dirs = stdout.read().decode('utf-8').strip().split('\n')
 
-            for i in range(n_backup - self.keep):
-                try:
-                    rmtree(f'{self.output}/simple_backup/{dirs[i]}')
-                    count += 1
-                except FileNotFoundError:
-                    logger.error(f'Error while removing backup {dirs[i]}. Directory not found')
-                except PermissionError:
-                    logger.error(f'Error while removing backup {dirs[i]}. Permission denied')
+            n_backup = len(dirs)
 
-            if count == 1:
-                logger.info(f'Removed {count} backup')
-            else:
-                logger.info(f'Removed {count} backups')
+            if not self._remove_before:
+                n_backup -= 1
+
+            count = 0
+
+            if n_backup > self.keep:
+                logger.info('Removing old backups...')
+                dirs.sort()
+
+                for i in range(n_backup - self.keep):
+                    _, _, stderr = self._ssh.exec_command(f'rm -r "{self.output}/simple_backup/{dirs[i]}"')
+
+                    err = stderr.read().decode('utf-8').strip().split('\n')[0]
+
+                    if err != '':
+                        logger.error('Error while removing backup %s.', {dirs[i]})
+                        logger.error(err)
+                    else:
+                        count += 1
+        else:
+            try:
+                dirs = os.listdir(f'{self.output}/simple_backup')
+            except FileNotFoundError:
+                return
+
+            n_backup = len(dirs)
+
+            if not self._remove_before:
+                n_backup -= 1
+
+            count = 0
+
+            if n_backup > self.keep:
+                logger.info('Removing old backups...')
+                dirs.sort()
+
+                for i in range(n_backup - self.keep):
+                    try:
+                        rmtree(f'{self.output}/simple_backup/{dirs[i]}')
+                        count += 1
+                    except FileNotFoundError:
+                        logger.error('Error while removing backup %s. Directory not found', dirs[i])
+                    except PermissionError:
+                        logger.error('Error while removing backup %s. Permission denied', dirs[i])
+
+        if count == 1:
+            logger.info('Removed %d backup', count)
+        elif count > 1:
+            logger.info('Removed %d backups', count)
 
     def find_last_backup(self):
-        try:
-            dirs = sorted([f.path for f in os.scandir(f'{self.output}/simple_backup') if f.is_dir(follow_symlinks=False)])
-        except FileNotFoundError:
-            logger.info('No previous backups available')
+        """Get path of last backup (from last_backup symlink) for rsync --link-dest"""
 
-            return
-        except PermissionError:
-            logger.critical('Cannot access the backup directory. Permission denied')
+        if self._remote:
+            if self._ssh is None:
+                logger.critical('SSH connection to server failed')
+                sys.exit(1)
+
+            _, stdout, _ = self._ssh.exec_command(f'find {self.output}/simple_backup/ -mindepth 1 -maxdepth 1 -type d | sort')
+            output = stdout.read().decode('utf-8').strip().split('\n')
+
+            if output[-1] != '':
+                self._last_backup = output[-1]
+            else:
+                logger.info('No previous backups available')
+        else:
+            try:
+                dirs = sorted([f.path for f in os.scandir(f'{self.output}/simple_backup') if f.is_dir(follow_symlinks=False)])
+            except FileNotFoundError:
+                logger.info('No previous backups available')
+
+                return
+            except PermissionError:
+                logger.critical('Cannot access the backup directory. Permission denied')
+
+                try:
+                    notify('Backup failed (check log for details)')
+                except NameError:
+                    pass
+
+                sys.exit(3)
 
             try:
-                notify('Backup failed (check log for details)')
-            except NameError:
-                pass
+                self._last_backup = dirs[-1]
+            except IndexError:
+                logger.info('No previous backups available')
 
-            sys.exit(3)
+    def _ssh_connect(self):
+        ssh = paramiko.SSHClient()
 
         try:
-            self._last_backup = dirs[-1]
-        except IndexError:
-            logger.info('No previous backups available')
+            ssh.load_host_keys(filename=f'{homedir}/.ssh/known_hosts')
+        except FileNotFoundError:
+            logger.warning(f'Cannot find file {homedir}/.ssh/known_hosts')
+
+        ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
+
+        try:
+            ssh.connect(self.host, username=self.username)
+
+            return ssh
+        except UserWarning:
+            k = input(f'Unknown key for host {self.host}. Continue anyway? (Y/N) ')
+
+            if k[0].upper() == 'Y':
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            else:
+                return None
+        except paramiko.BadHostKeyException as e:
+            logger.critical('Can\'t connect to the server.')
+            logger.critical(e)
+
+            return None
+        except paramiko.SSHException:
+            pass
+
+        try:
+            ssh.connect(self.host, username=self.username)
+
+            return ssh
+        except paramiko.SSHException:
+            pass
+
+        if self.ssh_keyfile is None:
+            try:
+                password = getpass(f'{self.username}@{self.host}\'s password: ')
+                ssh.connect(self.host, username=self.username, password=password)
+
+                self._password_auth = True
+                os.environ['SSHPASS'] = password
+
+                return ssh
+            except paramiko.SSHException as e:
+                logger.critical('Can\'t connect to the server.')
+                logger.critical(e)
+
+                return None
+
+        pkey = None
+
+        try:
+            pkey = RSAKey.from_private_key_file(self.ssh_keyfile)
+        except paramiko.PasswordRequiredException:
+            password = getpass(f'Enter passwphrase for key \'{self.ssh_keyfile}\': ')
+
+            try:
+                pkey = RSAKey.from_private_key_file(self.ssh_keyfile, password)
+            except paramiko.SSHException:
+                pass
+
+        if pkey is None:
+            try:
+                pkey = Ed25519Key.from_private_key_file(self.ssh_keyfile)
+            except paramiko.PasswordRequiredException:
+                try:
+                    pkey = Ed25519Key.from_private_key_file(self.ssh_keyfile, password)
+                except paramiko.SSHException:
+                    pass
+
+        if pkey is None:
+            try:
+                pkey = ECDSAKey.from_private_key_file(self.ssh_keyfile)
+            except paramiko.PasswordRequiredException:
+                try:
+                    pkey = ECDSAKey.from_private_key_file(self.ssh_keyfile, password)
+                except paramiko.SSHException:
+                    pass
+
+        if pkey is None:
+            try:
+                pkey = DSSKey.from_private_key_file(self.ssh_keyfile)
+            except paramiko.PasswordRequiredException:
+                try:
+                    pkey = DSSKey.from_private_key_file(self.ssh_keyfile, password)
+                except paramiko.SSHException:
+                    pass
+
+        try:
+            ssh.connect(self.host, username=self.username, pkey=pkey)
+        except paramiko.SSHException:
+            logger.critical('SSH connection to server failed')
+
+            return None
+
+        return ssh
 
     # Function to read configuration file
     @timing(logger)
     def run(self):
+        """Perform the backup"""
+
         logger.info('Starting backup...')
 
         try:
-            notify('Starting backup...')
+            _notify('Starting backup...')
         except NameError:
             pass
 
+        self.define_backup_dir()
         self.find_last_backup()
-        self.create_backup_dir()
 
         _, self._inputs_path = mkstemp(prefix='tmp_inputs', text=True)
         count = 0
 
-        with open(self._inputs_path, 'w') as fp:
+        with open(self._inputs_path, 'w', encoding='utf-8') as fp:
             for i in self.inputs:
                 if not os.path.exists(i):
-                    logger.warning(f'Input {i} not found. Skipping')
+                    logger.warning('Input %s not found. Skipping', i)
                 else:
                     fp.write(i)
                     fp.write('\n')
@@ -209,59 +448,100 @@ class Backup:
 
         _, self._exclude_path = mkstemp(prefix='tmp_exclude', text=True)
 
-        with open(self._exclude_path, 'w') as fp:
+        with open(self._exclude_path, 'w', encoding='utf-8') as fp:
             if self.exclude is not None:
                 for e in self.exclude:
                     fp.write(e)
                     fp.write('\n')
 
-        if self.keep != -1 and self.remove_before:
+        if self.keep != -1 and self._remove_before:
             self.remove_old_backups()
 
         logger.info('Copying files. This may take a long time...')
 
         if self._last_backup == '':
-            rsync = f'rsync {self.options} --exclude-from={self._exclude_path} ' +\
-                    f'--files-from={self._inputs_path} / "{self._output_dir}" ' +\
-                    '--ignore-missing-args'
+            rsync = f'/usr/bin/rsync {self.options} --exclude-from={self._exclude_path} ' +\
+                    f'--files-from={self._inputs_path} / "{self._server}{self._output_dir}"'
         else:
-            rsync = f'rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
-                    f'{self._exclude_path} --files-from={self._inputs_path} / "{self._output_dir}" ' +\
-                    '--ignore-missing-args'
+            rsync = f'/usr/bin/rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
+                    f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}"'
 
-        p = Popen(rsync, stdout=PIPE, stderr=STDOUT, shell=True)
-        output, _ = p.communicate()
+        if euid == 0 and self.ssh_keyfile is not None:
+            rsync = f'{rsync} -e \'ssh -i {self.ssh_keyfile} -o StrictHostKeyChecking=no\''
+        elif self._password_auth and which('sshpass'):
+            rsync = f'{rsync} -e \'sshpass -e ssh -l {self.username} -o StrictHostKeyChecking=no\''
+        else:
+            rsync = f'{rsync} -e \'ssh -o StrictHostKeyChecking=no\''
 
-        if p.returncode != 0:
-            self._err_flag = True
+        if self._remote and self.remote_sudo:
+            rsync = f'{rsync} --rsync-path="sudo rsync"'
+
+        args = shlex.split(rsync)
+
+        with Popen(args, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) as p:
+            output, _ = p.communicate()
+
+            try:
+                del os.environ['SSHPASS']
+            except KeyError:
+                pass
+
+            if p.returncode != 0:
+                self._err_flag = True
 
         output = output.decode("utf-8").split('\n')
 
-        logger.info(f'rsync: {output[-3]}')
-        logger.info(f'rsync: {output[-2]}')
+        if self._err_flag:
+            logger.error('rsync: %s', output)
+        else:
+            logger.info('rsync: %s', output[-3])
+            logger.info('rsync: %s', output[-2])
 
-        if self.keep != -1 and not self.remove_before:
+        if self.keep != -1 and not self._remove_before:
             self.remove_old_backups()
 
         os.remove(self._inputs_path)
         os.remove(self._exclude_path)
 
-        logger.info('Backup completed')
+        if self._remote:
+            _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self._output_dir}" ]; then echo "ok"; fi')
 
-        if self._err_flag:
-            logger.warning('Some errors occurred (check log for details)')
+            output = stdout.read().decode('utf-8').strip()
 
-            try:
-                notify('Backup finished with errors (check log for details)')
-            except NameError:
-                pass
+            if output == 'ok':
+                logger.info('Backup completed')
 
-            return 4
+                try:
+                    _notify('Backup completed')
+                except NameError:
+                    pass
+            else:
+                logger.error('Backup failed')
+
+                try:
+                    _notify('Backup failed (check log for details)')
+                except NameError:
+                    pass
+
+            if self._ssh:
+                self._ssh.close()
         else:
-            try:
-                notify('Backup finished')
-            except NameError:
-                pass
+            if self._err_flag:
+                logger.error('Some errors occurred while performing the backup')
+
+                try:
+                    _notify('Some errors occurred while performing the backup. Check log for details')
+                except NameError:
+                    pass
+
+                return 4
+            else:
+                logger.info('Backup completed')
+
+                try:
+                    _notify('Backup completed')
+                except NameError:
+                    pass
 
             return 0
 
@@ -269,23 +549,30 @@ class Backup:
 def _parse_arguments():
     parser = argparse.ArgumentParser(prog='simple_backup',
                                      description='Simple backup script written in Python that uses rsync to copy files',
-                                     epilog='Report bugs to dfucini<at>gmail<dot>com',
+                                     epilog='See simple_backup(1) manpage for full documentation',
                                      formatter_class=MyFormatter)
 
     parser.add_argument('-c', '--config', default=f'{homedir}/.config/simple_backup/simple_backup.conf',
                         help='Specify location of configuration file')
-    parser.add_argument('-i', '--input', nargs='+', help='Paths/files to backup')
+    parser.add_argument('-i', '--inputs', nargs='+', help='Paths/files to backup')
     parser.add_argument('-o', '--output', help='Output directory for the backup')
     parser.add_argument('-e', '--exclude', nargs='+', help='Files/directories/patterns to exclude from the backup')
     parser.add_argument('-k', '--keep', type=int, help='Number of old backups to keep')
+    parser.add_argument('--host', help='Server hostname (for remote backup)')
+    parser.add_argument('-u', '--username', help='Username to connect to server (for remote backup)')
+    parser.add_argument('--keyfile', help='SSH key location')
     parser.add_argument('-s', '--checksum', action='store_true',
-                        help='Use checksum rsync option to compare files (MUCH SLOWER)')
+                        help='Use checksum rsync option to compare files')
+    parser.add_argument('-z', '--compress', action='store_true', help='Compress data during the transfer')
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
     parser.add_argument('--no-syslog', action='store_true', help='Disable systemd journal logging')
     parser.add_argument('--rsync-options', nargs='+',
-                        choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 'D', 'H', 'X'],
+                        choices=['a', 'l', 'p', 't', 'g', 'o', 'c', 'h', 's', 'D', 'H', 'X'],
                         help='Specify options for rsync')
+    parser.add_argument('--remote-sudo', action='store_true', help='Run rsync on remote server with sudo if allowed')
+    parser.add_argument('--numeric-ids', action='store_true',
+                        help='Use rsync \'--numeric-ids\' option (don\'t map uid/gid values by name')
 
     args = parser.parse_args()
 
@@ -302,7 +589,7 @@ def _expand_inputs(inputs):
         i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
 
         if len(i_ex) == 0:
-            logger.warning(f'No file or directory matching input {i}. Skipping...')
+            logger.warning('No file or directory matching input %s. Skipping...', i)
         else:
             expanded_inputs.extend(i_ex)
 
@@ -310,31 +597,89 @@ def _expand_inputs(inputs):
 
 
 def _read_config(config_file):
-    if not os.path.isfile(config_file):
-        logger.warning(f'Config file {config_file} does not exist')
+    config_args = {}
 
-        return None, None, None, None
+    if not os.path.isfile(config_file):
+        logger.warning('Config file %s does not exist', config_file)
+
+        return config_args
 
     config = configparser.ConfigParser()
     config.read(config_file)
 
-    inputs = config.get('default', 'inputs')
+    section = 'backup'
+
+    # Allow compatibility with previous version of config file
+    try:
+        inputs = config.get(section, 'inputs')
+    except configparser.NoSectionError:
+        section = 'default'
+        inputs = config.get(section, 'inputs')
+
     inputs = inputs.split(',')
     inputs = _expand_inputs(inputs)
     inputs = list(set(inputs))
-    output = config.get('default', 'backup_dir')
+
+    config_args['inputs'] = inputs
+
+    output = config.get(section, 'backup_dir')
     output = os.path.expanduser(output.replace('~', f'~{user}'))
-    exclude = config.get('default', 'exclude')
-    exclude = exclude.split(',')
-    keep = config.getint('default', 'keep')
 
-    return inputs, output, exclude, keep
+    config_args['output'] = output
+
+    try:
+        exclude = config.get(section, 'exclude')
+        exclude = exclude.split(',')
+    except configparser.NoOptionError:
+        exclude = []
+
+    config_args['exclude'] = exclude
+
+    try:
+        keep = config.getint(section, 'keep')
+    except configparser.NoOptionError:
+        keep = -1
+
+    config_args['keep'] = keep
+
+    try:
+        host = config.get('server', 'host')
+        username = config.get('server', 'username')
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        host = None
+        username = None
+
+    config_args['host'] = host
+    config_args['username'] = username
+
+    try:
+        ssh_keyfile = config.get('server', 'ssh_keyfile')
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        ssh_keyfile = None
+
+    config_args['ssh_keyfile'] = ssh_keyfile
+
+    try:
+        remote_sudo = config.getboolean('server', 'remote_sudo')
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        remote_sudo = False
+
+    config_args['remote_sudo'] = remote_sudo
+
+    try:
+        numeric_ids = config.getboolean('server', 'numeric_ids')
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        numeric_ids = False
+
+    config_args['numeric_ids'] = numeric_ids
+
+    return config_args
 
 
-def notify(text):
-    euid = os.geteuid()
+def _notify(text):
+    _euid = os.geteuid()
 
-    if euid == 0:
+    if _euid == 0:
         uid = os.getenv('SUDO_UID')
     else:
         uid = os.geteuid()
@@ -346,10 +691,12 @@ def notify(text):
     obj = dbus.Interface(obj, 'org.freedesktop.Notifications')
     obj.Notify('', 0, '', 'simple_backup', text, [], {'urgency': 1}, 10000)
 
-    os.seteuid(int(euid))
+    os.seteuid(int(_euid))
 
 
 def simple_backup():
+    """Main"""
+
     args = _parse_arguments()
 
     if args.no_syslog:
@@ -358,35 +705,42 @@ def simple_backup():
         except NameError:
             pass
 
-    inputs, output, exclude, keep = _read_config(args.config)
+    try:
+        config_args = _read_config(args.config)
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        logger.critical('Bad configuration file')
+        sys.exit(1)
 
-    if args.input is not None:
-        inputs = args.input
-
-    if args.output is not None:
-        output = args.output
-
-    if args.exclude is not None:
-        exclude = args.exclude
-
-    if args.keep is not None:
-        keep = args.keep
+    inputs = args.inputs if args.inputs is not None else config_args['inputs']
+    output = args.output if args.output is not None else config_args['output']
+    exclude = args.exclude if args.exclude is not None else config_args['exclude']
+    keep = args.keep if args.keep is not None else config_args['keep']
+    host = args.host if args.host is not None else config_args['host']
+    username = args.username if args.username is not None else config_args['username']
+    ssh_keyfile = args.keyfile if args.keyfile is not None else config_args['ssh_keyfile']
+    remote_sudo = args.remote_sudo if args.remote_sudo is not None else config_args['remote_sudo']
 
     if args.rsync_options is None:
-        if args.checksum:
-            rsync_options = '-arcvh -H -X'
-        else:
-            rsync_options = '-arvh -H -X'
+        rsync_options = ['-a', '-r', '-v', '-h', '-H', '-X', '-s', '--ignore-missing-args', '--mkpath']
     else:
-        rsync_options = '-r -v '
+        rsync_options = ['-r', '-v']
 
         for ro in args.rsync_options:
-            rsync_options = rsync_options + f'-{ro} '
+            rsync_options.append(f'-{ro}')
 
-        if '-c ' not in rsync_options and args.checksum:
-            rsync_options = rsync_options + '-c'
+    if args.checksum:
+        rsync_options.append('-c')
 
-    backup = Backup(inputs, output, exclude, keep, rsync_options, remove_before=args.remove_before_backup)
+    if args.compress:
+        rsync_options.append('-z')
+
+    if args.numeric_ids or config_args['numeric_ids']:
+        rsync_options.append('--numeric-ids')
+
+    rsync_options = ' '.join(rsync_options)
+
+    backup = Backup(inputs, output, exclude, keep, rsync_options, host, username, ssh_keyfile,
+                    remote_sudo, remove_before=args.remove_before_backup)
 
     return_code = backup.check_params()
 
