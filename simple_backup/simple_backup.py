@@ -606,7 +606,15 @@ def _expand_inputs(inputs):
 
 
 def _read_config(config_file):
-    config_args = {}
+    config_args = {'inputs': None,
+                   'output': None,
+                   'exclude': None,
+                   'keep': -1,
+                   'host': None,
+                   'username': None,
+                   'ssh_keyfile': None,
+                   'remote_sudo': False,
+                   'numeric_ids': False}
 
     if not os.path.isfile(config_file):
         logger.warning('Config file %s does not exist', config_file)
