@@ -29,10 +29,15 @@ from getpass import getpass
 from glob import glob
 
 from dotenv import load_dotenv
-import paramiko
-from paramiko import RSAKey, Ed25519Key, ECDSAKey, DSSKey
 
 warnings.filterwarnings('error')
+
+try:
+    raise ImportError
+    import paramiko
+    from paramiko import RSAKey, Ed25519Key, ECDSAKey, DSSKey
+except ImportError:
+    pass
 
 try:
     from systemd import journal
@@ -181,7 +186,7 @@ class Backup:
             self._ssh = self._ssh_connect()
 
             if self._ssh is None:
-                sys.exit(1)
+                sys.exit(5)
 
             _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self.output}" ]; then echo "ok"; fi')
 
@@ -279,7 +284,7 @@ class Backup:
         if self._remote:
             if self._ssh is None:
                 logger.critical('SSH connection to server failed')
-                sys.exit(1)
+                sys.exit(5)
 
             _, stdout, _ = self._ssh.exec_command(f'find {self.output}/simple_backup/ -mindepth 1 -maxdepth 1 -type d | sort')
             output = stdout.read().decode('utf-8').strip().split('\n')
@@ -311,7 +316,11 @@ class Backup:
                 logger.info('No previous backups available')
 
     def _ssh_connect(self):
-        ssh = paramiko.SSHClient()
+        try:
+            ssh = paramiko.SSHClient()
+        except NameError:
+            logger.error('Install paramiko for ssh support')
+            return None
 
         try:
             ssh.load_host_keys(filename=f'{homedir}/.ssh/known_hosts')
@@ -709,7 +718,7 @@ def simple_backup():
         config_args = _read_config(args.config)
     except (configparser.NoSectionError, configparser.NoOptionError):
         logger.critical('Bad configuration file')
-        sys.exit(1)
+        sys.exit(6)
 
     inputs = args.inputs if args.inputs is not None else config_args['inputs']
     output = args.output if args.output is not None else config_args['output']
