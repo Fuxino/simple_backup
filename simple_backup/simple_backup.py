@@ -581,7 +581,7 @@ def _parse_arguments():
                         help='Specify options for rsync')
     parser.add_argument('--remote-sudo', action='store_true', help='Run rsync on remote server with sudo if allowed')
     parser.add_argument('--numeric-ids', action='store_true',
-                        help='Use rsync \'--numeric-ids\' option (don\'t map uid/gid values by name')
+                        help='Use rsync \'--numeric-ids\' option (don\'t map uid/gid values by name)')
 
     args = parser.parse_args()
 
