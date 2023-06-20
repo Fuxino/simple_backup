@@ -10,6 +10,7 @@ Classes:
     MyFormatter
     Backup
 """
+
 # Import libraries
 import sys
 import os
@@ -33,7 +34,6 @@ from dotenv import load_dotenv
 warnings.filterwarnings('error')
 
 try:
-    raise ImportError
     import paramiko
     from paramiko import RSAKey, Ed25519Key, ECDSAKey, DSSKey
 except ImportError:
@@ -119,9 +119,9 @@ class Backup:
             String representing main backup options for rsync
         keep: int
             Number of old backup to preserve
-        host: str
+        ssh_host: str
             Hostname of server (for remote backup)
-        username: str
+        ssh_user: str
             Username for server login (for remote backup)
         ssh_keyfile: str
             Location of ssh key
@@ -143,15 +143,15 @@ class Backup:
             Perform the backup
     """
 
-    def __init__(self, inputs, output, exclude, keep, options, host=None, username=None,
+    def __init__(self, inputs, output, exclude, keep, options, ssh_host=None, ssh_user=None,
                  ssh_keyfile=None, remote_sudo=False, remove_before=False):
         self.inputs = inputs
         self.output = output
         self.exclude = exclude
         self.options = options
         self.keep = keep
-        self.host = host
-        self.username = username
+        self.ssh_host = ssh_host
+        self.ssh_user = ssh_user
         self.ssh_keyfile = ssh_keyfile
         self.remote_sudo = remote_sudo
         self._remove_before = remove_before
@@ -179,7 +179,7 @@ class Backup:
 
             return 2
 
-        if self.host is not None and self.username is not None:
+        if self.ssh_host is not None and self.ssh_user is not None:
             self._remote = True
 
         if self._remote:
@@ -216,7 +216,7 @@ class Backup:
         self._output_dir = f'{self.output}/simple_backup/{now}'
 
         if self._remote:
-            self._server = f'{self.username}@{self.host}:'
+            self._server = f'{self.ssh_user}@{self.ssh_host}:'
 
     def remove_old_backups(self):
         """Remove old backups if there are more than indicated by 'keep'"""
@@ -330,11 +330,11 @@ class Backup:
         ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
 
         try:
-            ssh.connect(self.host, username=self.username)
+            ssh.connect(self.ssh_host, username=self.ssh_user)
 
             return ssh
         except UserWarning:
-            k = input(f'Unknown key for host {self.host}. Continue anyway? (Y/N) ')
+            k = input(f'Unknown key for host {self.ssh_host}. Continue anyway? (Y/N) ')
 
             if k[0].upper() == 'Y':
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -349,7 +349,7 @@ class Backup:
             pass
 
         try:
-            ssh.connect(self.host, username=self.username)
+            ssh.connect(self.ssh_host, username=self.ssh_user)
 
             return ssh
         except paramiko.SSHException:
@@ -357,8 +357,8 @@ class Backup:
 
         if self.ssh_keyfile is None:
             try:
-                password = getpass(f'{self.username}@{self.host}\'s password: ')
-                ssh.connect(self.host, username=self.username, password=password)
+                password = getpass(f'{self.ssh_user}@{self.ssh_host}\'s password: ')
+                ssh.connect(self.ssh_host, username=self.ssh_user, password=password)
 
                 self._password_auth = True
                 os.environ['SSHPASS'] = password
@@ -410,7 +410,7 @@ class Backup:
                     pass
 
         try:
-            ssh.connect(self.host, username=self.username, pkey=pkey)
+            ssh.connect(self.ssh_host, username=self.ssh_user, pkey=pkey)
         except paramiko.SSHException:
             logger.critical('SSH connection to server failed')
 
@@ -478,7 +478,7 @@ class Backup:
         if euid == 0 and self.ssh_keyfile is not None:
             rsync = f'{rsync} -e \'ssh -i {self.ssh_keyfile} -o StrictHostKeyChecking=no\''
         elif self._password_auth and which('sshpass'):
-            rsync = f'{rsync} -e \'sshpass -e ssh -l {self.username} -o StrictHostKeyChecking=no\''
+            rsync = f'{rsync} -e \'sshpass -e ssh -l {self.ssh_user} -o StrictHostKeyChecking=no\''
         else:
             rsync = f'{rsync} -e \'ssh -o StrictHostKeyChecking=no\''
 
@@ -567,8 +567,8 @@ def _parse_arguments():
     parser.add_argument('-o', '--output', help='Output directory for the backup')
     parser.add_argument('-e', '--exclude', nargs='+', help='Files/directories/patterns to exclude from the backup')
     parser.add_argument('-k', '--keep', type=int, help='Number of old backups to keep')
-    parser.add_argument('--host', help='Server hostname (for remote backup)')
-    parser.add_argument('-u', '--username', help='Username to connect to server (for remote backup)')
+    parser.add_argument('--ssh-host', help='Server hostname (for remote backup)')
+    parser.add_argument('--ssh-user', help='Username to connect to server (for remote backup)')
     parser.add_argument('--keyfile', help='SSH key location')
     parser.add_argument('-s', '--checksum', action='store_true',
                         help='Use checksum rsync option to compare files')
@@ -610,8 +610,8 @@ def _read_config(config_file):
                    'output': None,
                    'exclude': None,
                    'keep': -1,
-                   'host': None,
-                   'username': None,
+                   'ssh_host': None,
+                   'ssh_user': None,
                    'ssh_keyfile': None,
                    'remote_sudo': False,
                    'numeric_ids': False}
@@ -660,14 +660,14 @@ def _read_config(config_file):
     config_args['keep'] = keep
 
     try:
-        host = config.get('server', 'host')
-        username = config.get('server', 'username')
+        ssh_host = config.get('server', 'ssh_host')
+        ssh_user = config.get('server', 'ssh_user')
     except (configparser.NoSectionError, configparser.NoOptionError):
-        host = None
-        username = None
+        ssh_host = None
+        ssh_user = None
 
-    config_args['host'] = host
-    config_args['username'] = username
+    config_args['ssh_host'] = ssh_host
+    config_args['ssh_user'] = ssh_user
 
     try:
         ssh_keyfile = config.get('server', 'ssh_keyfile')
@@ -732,8 +732,8 @@ def simple_backup():
     output = args.output if args.output is not None else config_args['output']
     exclude = args.exclude if args.exclude is not None else config_args['exclude']
     keep = args.keep if args.keep is not None else config_args['keep']
-    host = args.host if args.host is not None else config_args['host']
-    username = args.username if args.username is not None else config_args['username']
+    ssh_host = args.ssh_host if args.ssh_host is not None else config_args['ssh_host']
+    ssh_user = args.ssh_user if args.ssh_user is not None else config_args['ssh_user']
     ssh_keyfile = args.keyfile if args.keyfile is not None else config_args['ssh_keyfile']
     remote_sudo = args.remote_sudo if args.remote_sudo is not None else config_args['remote_sudo']
 
@@ -756,7 +756,7 @@ def simple_backup():
 
     rsync_options = ' '.join(rsync_options)
 
-    backup = Backup(inputs, output, exclude, keep, rsync_options, host, username, ssh_keyfile,
+    backup = Backup(inputs, output, exclude, keep, rsync_options, ssh_host, ssh_user, ssh_keyfile,
                     remote_sudo, remove_before=args.remove_before_backup)
 
     return_code = backup.check_params()

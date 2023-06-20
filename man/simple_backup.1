@@ -2,12 +2,12 @@
 .SH NAME
 simple_backup \- Backup files and folders using rsync
 .SH SYNOPSIS
-.BR simple_backup
+.B simple_backup
 \-h, \-\-help
 .PD 0
 .P
 .PD
-.BR simple_backup
+.B simple_backup
 [\-c, \-\-config FILE]
 [\-i, \-\-input INPUT [INPUT...]]
 [\-o, \-\-output DIR]
@@ -16,8 +16,8 @@ simple_backup \- Backup files and folders using rsync
 .PD
 .RS 14 [\-e, \-\-exclude FILE|DIR|PATTERN [FILE|...]]
 [\-k, \-\-keep N]
-[\-\-host HOSTNAME]
-[\-u, \-\-username USERNAME]
+[\-\-ssh\-host HOSTNAME]
+[\-\-ssh\-user USERNAME]
 [\-\-keyfile FILE]
 .PD 0
 .P
@@ -27,7 +27,7 @@ simple_backup \- Backup files and folders using rsync
 [\-\-remove\-before\-backup]
 .RE
 .SH DESCRIPTION
-.BR simple_backup
+.B simple_backup
 is a python script for performing backup of files and folders.
 .P
 It uses rsync to copy the files to the specified location. Parameters for the backup such as
@@ -62,10 +62,10 @@ will not be copied. Multiple elements can be specified, in the same way as for t
 Specify how many old backups (so excluding the current one) will be kept. The default behavior
 is to keep them all (same as N=\-1)
 .TP
-.B \-\-host HOSTNAME
+.B \-\-ssh\-host HOSTNAME
 Hostname of the server where to copy the files in case of remote backup through SSH
 .TP
-.B \-u, \-\-username USERNAME
+.B \-\-ssh\-user USERNAME
 Username for connecting to the server in case of remote backup
 .TP
 .B \-\-keyfile FILE
@@ -104,7 +104,7 @@ Options \-r and \-v are used in any case. Not that options must be specified wit
 .EE
 .TP
 Check
-.B rsync (1)
+.BR rsync (1)
 for details about the options.
 .RE
 .TP
@@ -123,7 +123,7 @@ Copy it to the default location ($HOME/.config/simple_backup) and edit it as nee
 .SH REMOTE BACKUP
 It is possible to choose a directory on a remote server as destination for the backup. The files
 are copied by rsync through SSH. Server hostname and username must be specified, either in the
-configuration file, or on the command line (\(aq\-\-host\(aq and \(aq\-\-username\(aq options).
+configuration file, or on the command line (\(aq\-\-ssh\-host\(aq and \(aq\-\-ssh\-user\(aq options).
 .SS AUTHENTICATION
 For authentication, it is possible to use SSH key or password.
 .P
@@ -145,7 +145,7 @@ in order to connect to the user\(aq s SSH agent it is necessary to preserve the 
 It is also possible to make this permanent by editing the
 .B sudoers
 file (see
-.B sudoers (5)
+.BR sudoers (5)
 )
 .P
 If SSH key authentication is not available, password authentication will be used instead.
@@ -154,7 +154,7 @@ Note that in this case
 (if available) will be used to send the password to rsync, to avoid prompting the user for
 the password multiple
 times. This can pose some security risks, see
-.B sshpass (1)
+.BR sshpass (1)
 for details. For this reason, use SSH key authentication if possible.
 .SH EXIT STATUS
 .TP
