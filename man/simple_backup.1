@@ -39,7 +39,7 @@ Parameters specified on the command line will override those in the configuratio
 .SH OPTIONS
 .TP
 .B \-h, \-\-help
-Print a short help message and exit
+Print a short help message and exit.
 .TP
 .B \-c, \-\-config FILE
 Specify the configuration file, useful to specify a different one from the default.
@@ -52,21 +52,24 @@ or to use single or double quotes around them.
 .B \-o, \-\-output DIR
 Specify the directory where the files will be copied. The program will automatically
 create a subdirectory called \(aqsimple_backup\(aq (if it does not already exist) and
-inside this directory the actual backup directory (using the current date and time)
+inside this directory the actual backup directory (using the current date and time).
 .TP
 .B \-e, \-\-exclude FILE|DIR|PATTERN [FILE|...]]
 Specify files, directories or patterns to exclude from the backup. Matching files and directories
-will not be copied. Multiple elements can be specified, in the same way as for the \-\-input option
+will not be copied. Multiple elements can be specified, in the same way as for the \-\-input option.
 .TP
 .B \-k, \-\-keep N
 Specify how many old backups (so excluding the current one) will be kept. The default behavior
-is to keep them all (same as N=\-1)
+is to keep them all (same as N=\-1).
+.TP
+.B \-u, \-\-user USERNAME
+Explicitly specify the user running the backup (in case it is needed for home directory expansion).
 .TP
 .B \-\-ssh\-host HOSTNAME
-Hostname of the server where to copy the files in case of remote backup through SSH
+Hostname of the server where to copy the files in case of remote backup through SSH.
 .TP
 .B \-\-ssh\-user USERNAME
-Username for connecting to the server in case of remote backup
+Username for connecting to the server in case of remote backup.
 .TP
 .B \-\-keyfile FILE
 Location of the SSH key for server authentication. 
@@ -85,7 +88,7 @@ before performing the backup.
 Default behavior is to remove old backups after successfully completing the backup.
 .TP
 .B \-\-no\-syslog
-Don't use systemd journal for logging
+Don't use systemd journal for logging.
 .TP
 .B \-\-rsync\-options OPTIONS [OPTION...]
 By default, the following rsync options are used:
@@ -116,7 +119,7 @@ Run rsync on the remote server with sudo. This is needed if you want to preserve
 .RE
 .TP
 .B \-\-numeric\-ids
-Use rsync \-\-numeric\-ids option. This causes rsync to use numeric uid/gid instead of trying to map uid/gid names from the local machine to the server
+Use rsync \-\-numeric\-ids option. This causes rsync to use numeric uid/gid instead of trying to map uid/gid names from the local machine to the server.
 .SH CONFIGURATION
 An example configuration file is provided at \(aq/usr/share/doc/simple_backup/simple_backup.conf\(aq.
 Copy it to the default location ($HOME/.config/simple_backup) and edit it as needed.
@@ -159,25 +162,25 @@ for details. For this reason, use SSH key authentication if possible.
 .SH EXIT STATUS
 .TP
 .B 0
-The backup was completed without errors
+The backup was completed without errors.
 .TP
 .B 1
-No valid inputs selected for backup
+No valid inputs selected for backup.
 .TP
 .B 2
-Backup failed because output directory for storing the backup does not exist
+Backup failed because output directory for storing the backup does not exist.
 .TP
 .B 3
-Permission denied to access the output directory
+Permission denied to access the output directory.
 .TP
 .B 4
-rsync error (rsync returned a non-zero value)
+rsync error (rsync returned a non-zero value).
 .TP
 .B 5
-SSH connection failed
+SSH connection failed.
 .TP
 .B 6
-Bad configuration file
+Bad configuration file.
 .SH SEE ALSO
 .BR rsync (1)
 .SH AUTHORS

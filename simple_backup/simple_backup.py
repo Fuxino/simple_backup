@@ -51,15 +51,6 @@ except ImportError:
 
 
 load_dotenv()
-euid = os.geteuid()
-
-if euid == 0:
-    user = os.getenv('SUDO_USER')
-    homedir = os.path.expanduser(f'~{user}')
-else:
-    user = os.getenv('USER')
-    homedir = os.getenv('HOME')
-
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(os.path.basename(__file__))
 c_handler = StreamHandler()
@@ -166,7 +157,7 @@ class Backup:
         self._password_auth = False
         self._password = None
 
-    def check_params(self):
+    def check_params(self, homedir=''):
         """Check if parameters for the backup are valid"""
 
         if self.inputs is None or len(self.inputs) == 0:
@@ -183,10 +174,10 @@ class Backup:
             self._remote = True
 
         if self._remote:
-            self._ssh = self._ssh_connect()
+            self._ssh = self._ssh_connect(homedir)
 
             if self._ssh is None:
-                sys.exit(5)
+                return 5
 
             _, stdout, _ = self._ssh.exec_command(f'if [ -d "{self.output}" ]; then echo "ok"; fi')
 
@@ -315,7 +306,7 @@ class Backup:
             except IndexError:
                 logger.info('No previous backups available')
 
-    def _ssh_connect(self):
+    def _ssh_connect(self, homedir=''):
         try:
             ssh = paramiko.SSHClient()
         except NameError:
@@ -475,6 +466,8 @@ class Backup:
             rsync = f'/usr/bin/rsync {self.options} --link-dest="{self._last_backup}" --exclude-from=' +\
                     f'{self._exclude_path} --files-from={self._inputs_path} / "{self._server}{self._output_dir}"'
 
+        euid = os.geteuid()
+
         if euid == 0 and self.ssh_keyfile is not None:
             rsync = f'{rsync} -e \'ssh -i {self.ssh_keyfile} -o StrictHostKeyChecking=no\''
         elif self._password_auth and which('sshpass'):
@@ -556,6 +549,15 @@ class Backup:
 
 
 def _parse_arguments():
+    euid = os.geteuid()
+
+    if euid == 0:
+        user = os.getenv('SUDO_USER')
+    else:
+        user = os.getenv('USER')
+    
+    homedir = os.path.expanduser(f'~{user}')
+
     parser = argparse.ArgumentParser(prog='simple_backup',
                                      description='Simple backup script written in Python that uses rsync to copy files',
                                      epilog='See simple_backup(1) manpage for full documentation',
@@ -567,11 +569,11 @@ def _parse_arguments():
     parser.add_argument('-o', '--output', help='Output directory for the backup')
     parser.add_argument('-e', '--exclude', nargs='+', help='Files/directories/patterns to exclude from the backup')
     parser.add_argument('-k', '--keep', type=int, help='Number of old backups to keep')
+    parser.add_argument('-u', '--user', help='Explicitly specify the user running the backup')
+    parser.add_argument('-s', '--checksum', action='store_true', help='Use checksum rsync option to compare files')
     parser.add_argument('--ssh-host', help='Server hostname (for remote backup)')
     parser.add_argument('--ssh-user', help='Username to connect to server (for remote backup)')
     parser.add_argument('--keyfile', help='SSH key location')
-    parser.add_argument('-s', '--checksum', action='store_true',
-                        help='Use checksum rsync option to compare files')
     parser.add_argument('-z', '--compress', action='store_true', help='Compress data during the transfer')
     parser.add_argument('--remove-before-backup', action='store_true',
                         help='Remove old backups before executing the backup, instead of after')
@@ -588,14 +590,20 @@ def _parse_arguments():
     return args
 
 
-def _expand_inputs(inputs):
+def _expand_inputs(inputs, user=None):
     expanded_inputs = []
 
     for i in inputs:
         if i == '':
             continue
 
-        i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
+        if user is not None:
+            i_ex = glob(os.path.expanduser(i.replace('~', f'~{user}')))
+        else:
+            i_ex = glob(i)
+
+            if '~' in i:
+                logger.warning('Cannot expand \'~\'. No user specified')
 
         if len(i_ex) == 0:
             logger.warning('No file or directory matching input %s. Skipping...', i)
@@ -605,7 +613,7 @@ def _expand_inputs(inputs):
     return expanded_inputs
 
 
-def _read_config(config_file):
+def _read_config(config_file, user=None):
     config_args = {'inputs': None,
                    'output': None,
                    'exclude': None,
@@ -634,13 +642,17 @@ def _read_config(config_file):
         inputs = config.get(section, 'inputs')
 
     inputs = inputs.split(',')
-    inputs = _expand_inputs(inputs)
+    inputs = _expand_inputs(inputs, user)
     inputs = list(set(inputs))
 
     config_args['inputs'] = inputs
 
     output = config.get(section, 'backup_dir')
-    output = os.path.expanduser(output.replace('~', f'~{user}'))
+
+    if user is not None:
+        output = os.path.expanduser(output.replace('~', f'~{user}'))
+    elif user is None and '~' in output:
+        logger.warning('Cannot expand \'~\', no user specified')
 
     config_args['output'] = output
 
@@ -694,12 +706,15 @@ def _read_config(config_file):
 
 
 def _notify(text):
-    _euid = os.geteuid()
+    euid = os.geteuid()
 
-    if _euid == 0:
+    if euid == 0:
         uid = os.getenv('SUDO_UID')
     else:
-        uid = os.geteuid()
+        uid = euid
+
+    if uid is None:
+        return
 
     os.seteuid(int(uid))
     os.environ['DBUS_SESSION_BUS_ADDRESS'] = f'unix:path=/run/user/{uid}/bus'
@@ -708,13 +723,29 @@ def _notify(text):
     obj = dbus.Interface(obj, 'org.freedesktop.Notifications')
     obj.Notify('', 0, '', 'simple_backup', text, [], {'urgency': 1}, 10000)
 
-    os.seteuid(int(_euid))
+    os.seteuid(int(euid))
 
 
 def simple_backup():
     """Main"""
 
     args = _parse_arguments()
+
+    if args.user:
+        user = args.user
+        homedir = os.path.expanduser(f'~{user}')
+    else:
+        euid = os.geteuid()
+
+        if euid == 0:
+            user = os.getenv('SUDO_USER')
+            homedir = os.path.expanduser(f'~{user}')
+        else:
+            user = os.getenv('USER')
+            homedir = os.getenv('HOME')
+
+    if homedir is None:
+        homedir = ''
 
     if args.no_syslog:
         try:
@@ -723,10 +754,10 @@ def simple_backup():
             pass
 
     try:
-        config_args = _read_config(args.config)
+        config_args = _read_config(args.config, user)
     except (configparser.NoSectionError, configparser.NoOptionError):
         logger.critical('Bad configuration file')
-        sys.exit(6)
+        return 6
 
     inputs = args.inputs if args.inputs is not None else config_args['inputs']
     output = args.output if args.output is not None else config_args['output']
@@ -759,7 +790,7 @@ def simple_backup():
     backup = Backup(inputs, output, exclude, keep, rsync_options, ssh_host, ssh_user, ssh_keyfile,
                     remote_sudo, remove_before=args.remove_before_backup)
 
-    return_code = backup.check_params()
+    return_code = backup.check_params(homedir)
 
     if return_code == 0:
         return backup.run()
