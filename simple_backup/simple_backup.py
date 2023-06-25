@@ -135,7 +135,7 @@ class Backup:
     """
 
     def __init__(self, inputs, output, exclude, keep, options, ssh_host=None, ssh_user=None,
-                 ssh_keyfile=None, remote_sudo=False, remove_before=False):
+                 ssh_keyfile=None, remote_sudo=False, remove_before=False, verbose=False):
         self.inputs = inputs
         self.output = output
         self.exclude = exclude
@@ -146,13 +146,13 @@ class Backup:
         self.ssh_keyfile = ssh_keyfile
         self.remote_sudo = remote_sudo
         self._remove_before = remove_before
+        self._verbose = verbose
         self._last_backup = ''
         self._server = ''
         self._output_dir = ''
         self._inputs_path = ''
         self._exclude_path = ''
         self._remote = None
-        self._err_flag = False
         self._ssh = None
         self._password_auth = False
         self._password = None
@@ -409,6 +409,35 @@ class Backup:
 
         return ssh
 
+    def _returncode_log(self, returncode):
+        match returncode:
+            case 2:
+                logger.error('Rsync error (return code 2) - Protocol incompatibility')
+            case 3:
+                logger.error('Rsync error (return code 3) - Errors selecting input/output files, dirs')
+            case 4:
+                logger.error('Rsync error (return code 4) - Requested action not supported')
+            case 5:
+                logger.error('Rsync error (return code 5) - Error starting client-server protocol')
+            case 10:
+                logger.error('Rsync error (return code 10) - Error in socket I/O')
+            case 11:
+                logger.error('Rsync error (return code 11) - Error in file I/O')
+            case 12:
+                logger.error('Rsync error (return code 12) - Error in rsync protocol data stream')
+            case 22:
+                logger.error('Rsync error (return code 22) - Error allocating core memory buffers')
+            case 23:
+                logger.warning('Rsync error (return code 23) - Partial transfer due to error')
+            case 24:
+                logger.warning('Rsync error (return code 24) - Partial transfer due to vanished source files')
+            case 30:
+                logger.error('Rsync error (return code 30) - Timeout in data send/receive')
+            case 35:
+                logger.error('Rsync error (return code 35) - Timeout waiting for daemon connection')
+            case _:
+                logger.error('Rsync error (return code %d) - Check rsync(1) for details', returncode)
+
     # Function to read configuration file
     @timing(logger)
     def run(self):
@@ -488,16 +517,24 @@ class Backup:
             except KeyError:
                 pass
 
-            if p.returncode != 0:
-                self._err_flag = True
+            returncode = p.returncode
 
         output = output.decode("utf-8").split('\n')
 
-        if self._err_flag:
-            logger.error('rsync: %s', output)
+        if returncode == 0:
+            if self._verbose:
+                logger.info('rsync: %s', output)
+            else:
+                logger.info('rsync: %s', output[-3])
+                logger.info('rsync: %s', output[-2])
         else:
-            logger.info('rsync: %s', output[-3])
-            logger.info('rsync: %s', output[-2])
+            self._returncode_log(returncode)
+
+            if self._verbose:
+                if returncode in [23, 24]:
+                    logger.warning(output)
+                else:
+                    logger.error(output)
 
         if self.keep != -1 and not self._remove_before:
             self.remove_old_backups()
@@ -528,7 +565,7 @@ class Backup:
             if self._ssh:
                 self._ssh.close()
         else:
-            if self._err_flag:
+            if returncode != 0:
                 logger.error('Some errors occurred while performing the backup')
 
                 try:
@@ -537,13 +574,13 @@ class Backup:
                     pass
 
                 return 4
-            else:
-                logger.info('Backup completed')
 
-                try:
-                    _notify('Backup completed')
-                except NameError:
-                    pass
+            logger.info('Backup completed')
+
+            try:
+                _notify('Backup completed')
+            except NameError:
+                pass
 
             return 0
 
@@ -563,6 +600,7 @@ def _parse_arguments():
                                      epilog='See simple_backup(1) manpage for full documentation',
                                      formatter_class=MyFormatter)
 
+    parser.add_argument('-v', '--verbose', action='store_true', help='More verbose output')
     parser.add_argument('-c', '--config', default=f'{homedir}/.config/simple_backup/simple_backup.conf',
                         help='Specify location of configuration file')
     parser.add_argument('-i', '--inputs', nargs='+', help='Paths/files to backup')
@@ -788,7 +826,7 @@ def simple_backup():
     rsync_options = ' '.join(rsync_options)
 
     backup = Backup(inputs, output, exclude, keep, rsync_options, ssh_host, ssh_user, ssh_keyfile,
-                    remote_sudo, remove_before=args.remove_before_backup)
+                    remote_sudo, remove_before=args.remove_before_backup, verbose=args.verbose)
 
     return_code = backup.check_params(homedir)
 
