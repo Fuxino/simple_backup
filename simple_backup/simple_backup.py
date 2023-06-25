@@ -766,7 +766,7 @@ def simple_backup():
     ssh_host = args.ssh_host if args.ssh_host is not None else config_args['ssh_host']
     ssh_user = args.ssh_user if args.ssh_user is not None else config_args['ssh_user']
     ssh_keyfile = args.keyfile if args.keyfile is not None else config_args['ssh_keyfile']
-    remote_sudo = args.remote_sudo if args.remote_sudo is not None else config_args['remote_sudo']
+    remote_sudo = args.remote_sudo or config_args['remote_sudo']
 
     if args.rsync_options is None:
         rsync_options = ['-a', '-r', '-v', '-h', '-H', '-X', '-s', '--ignore-missing-args', '--mkpath']
