@@ -26,7 +26,7 @@ from timeit import default_timer
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from tempfile import mkstemp
-from getpass import getpass
+from getpass import GetPassWarning, getpass
 from glob import glob
 
 from dotenv import load_dotenv
@@ -355,6 +355,11 @@ class Backup:
                 os.environ['SSHPASS'] = password
 
                 return ssh
+            except GetPassWarning as e:
+                logger.critical('Unable to get password')
+                logger.critical(e)
+
+                return None
             except paramiko.SSHException as e:
                 logger.critical('Can\'t connect to the server.')
                 logger.critical(e)
