@@ -93,19 +93,19 @@ Don't use systemd journal for logging.
 .B \-\-rsync\-options OPTIONS [OPTION...]
 By default, the following rsync options are used:
 .RS
-.PP
+.P
     \-a \-r \-v \-h \-s \-H \-X
-.PP
+.P
 Using \-\-rsync\-options it is possible to manually select which options to use. Supported values are the following:
-.PP
+.P
     \-a, \-l, \-p, \-t, \-g, \-o, \-c, \-h, \-D, \-H, \-X, \-s
-.PP
+.P
 Options \-r and \-v are used in any case. Not that options must be specified without dash (\-), for example:
-.PP
+.P
 .EX
     simple_backup \-\-rsync\-options a l p
 .EE
-.TP
+.P
 Check
 .BR rsync (1)
 for details about the options.
@@ -114,8 +114,12 @@ for details about the options.
 .B \-\-remote\-sudo
 Run rsync on the remote server with sudo. This is needed if you want to preserve the owner of the files/folders to be copied (rsync \-\-owner option). For this to work the user used to login to the server obviously need to be allowed to use sudo. In addition, the user need to be able to run rsync with sudo without a password. To do this, /etc/sudoers on the server need to be edited adding a line like this one:
 .RS
-.PP
+.P
     <username> ALL=NOPASSWD:<path/to/rsync>
+.P
+To be able to remove old backups generated with \-\-remote\-sudo (see \-\-keep option), also
+.BR rm (1)
+needs to be allowed to run without password in the same way.
 .RE
 .TP
 .B \-\-numeric\-ids
@@ -139,7 +143,7 @@ When running
 .B simple_backup
 with
 .B sudo,
-in order to connect to the user\(aq s SSH agent it is necessary to preserve the \(aq SSH_AUTH_SOCK\(aq environment variable, for example:
+in order to connect to the user\(aqs SSH agent it is necessary to preserve the \(aqSSH_AUTH_SOCK\(aq environment variable, for example:
 .P
 .EX
     sudo --preserve-env=SSH_AUTH_SOCK -s simple_backup [options]
@@ -148,8 +152,7 @@ in order to connect to the user\(aq s SSH agent it is necessary to preserve the 
 It is also possible to make this permanent by editing the
 .B sudoers
 file (see
-.BR sudoers (5)
-)
+.BR sudoers (5))
 .P
 If SSH key authentication is not available, password authentication will be used instead.
 Note that in this case

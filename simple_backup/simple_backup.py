@@ -229,7 +229,10 @@ class Backup:
                 dirs.sort()
 
                 for i in range(n_backup - self.keep):
-                    _, _, stderr = self._ssh.exec_command(f'rm -r "{self.output}/simple_backup/{dirs[i]}"')
+                    if self.remote_sudo:
+                        _, _, stderr = self._ssh.exec_command(f'sudo rm -r "{self.output}/simple_backup/{dirs[i]}"')
+                    else:
+                        _, _, stderr = self._ssh.exec_command(f'rm -r "{self.output}/simple_backup/{dirs[i]}"')
 
                     err = stderr.read().decode('utf-8').strip().split('\n')[0]
 

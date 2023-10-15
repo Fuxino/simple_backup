@@ -68,4 +68,4 @@ sudo --preserve-env=SSH_AUTH_SOCK -s simple_backup [options]
 
 or by editing the sudoers file.
 If SSH key authentication is not available, password authentication will be used instead.
-
+Check the man page for more details.
